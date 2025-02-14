@@ -5,7 +5,7 @@
 This repository provides a Python-based analysis tool for identifying antigen-antibody residue hotspots using Ridge regression.
 
 ## **Required Inputs**
-To use this analysis, you need to provide the following two CSV files:
+To use this analysis, you need to provide the following CSV file:
 
 1. **`interaction_energy.csv`**  
    - This file should contain the **non-bonded interaction energies** from a **non-equilibrium pulling simulation**.
@@ -19,18 +19,6 @@ To use this analysis, you need to provide the following two CSV files:
      ```
    - The first column (`Frame`) represents simulation frames, and the second column (`AverageInteractionEnergy`) represents the computed interaction energy.
 
-2. **`average_frequency.csv`**  
-   - This file should contain **interaction frequencies** based on a **distance and/or angle cutoff** of **surface residues**.
-   - The frequency represents how often specific residue pairs interact.
-   - **Example format**:
-     ```
-     Frame,ResiduePair,InteractionFrequency
-     1,25-34,0.6
-     1,56-78,0.8
-     2,25-34,0.5
-     ```
-   - The `ResiduePair` column follows the `X-Y` format (e.g., residue 25 interacting with residue 34).
-   - The `InteractionFrequency` represents how frequently these interactions occur within a given frame.
 
 ## **Installation and Running the Analysis**
 
