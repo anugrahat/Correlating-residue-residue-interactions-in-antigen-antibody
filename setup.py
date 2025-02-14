@@ -3,8 +3,7 @@ from setuptools import setup, find_packages
 setup(
     name='antigen-antibody-residue-hotspot', 
     version='0.1.0',
-    author='Your Name',
-    author_email='your.email@example.com',
+    author='Anugraha TK',anu.thyagatur@gmail.com',
     description='A tool for antigen-antibody residue hotspot analysis using Ridge regression.',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
