@@ -9,7 +9,7 @@ import seaborn as sns
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import Ridge
 
-# --------------------Class for MD Interaction Analysis (Within 6 angstrom cutoff, computes interaction freequencies within the cutoff.) --------------------
+#  MD Interaction Analysis (Within 6 angstrom cutoff, computes interaction freequencies within the cutoff.) --------------------
 
 class InteractionAnalyzer:
     """
@@ -50,7 +50,7 @@ class InteractionAnalyzer:
         print(f"[INFO] Interaction frequencies saved to {self.output_file}")
         return self.output_file
 
-# -------------------- Class for Ridge Regression Analysis (Get regression coefficients/ compares the plot of change in interaction energy with change in frequency - inversly proprtional in general) --------------------
+# Ridge Regression Analysis (Get regression coefficients/ compares the plot of change in interaction energy with change in frequency - inversly proprtional in general) --------------------
 
 class RegressionAnalyzer:
     """
