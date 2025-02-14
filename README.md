@@ -8,7 +8,7 @@ This repository provides a Python-based analysis tool for identifying antigen-an
 To use this analysis, you need to provide the following CSV file:
 
 1. **`interaction_energy.csv`**  
-   - This file should contain the **non-bonded interaction energies** from a **non-equilibrium pulling simulation**.
+   - This file should contain the **non-bonded interaction energies** from a **non-equilibrium pulling simulation (Can be easily obtained using gmx energy using indexing (antigen-antibody)**.
    - The energy is calculated as the **sum of Van der Waals and short-range Coulomb interactions**.
    - **Example format**:
      ```
