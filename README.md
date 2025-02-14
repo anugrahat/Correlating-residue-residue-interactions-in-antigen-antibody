@@ -9,7 +9,7 @@ To use this analysis, you need to provide the following two CSV files:
 
 1. **`interaction_energy.csv`**  
    - This file should contain the **non-bonded interaction energies** from a **non-equilibrium pulling simulation**.
-   - The energy is calculated as the **sum of van der Waals and short-range Coulomb interactions**.
+   - The energy is calculated as the **sum of Van der Waals and short-range Coulomb interactions**.
    - **Example format**:
      ```
      Frame,AverageInteractionEnergy
