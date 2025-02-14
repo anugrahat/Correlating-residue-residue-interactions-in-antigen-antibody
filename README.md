@@ -39,7 +39,7 @@ To use this analysis, you need to provide the following two CSV files:
    git clone https://github.com/<your-username>/antigen-antibody-residue-hotspot.git
 
 
-2. cd antigen-antibody-residue-hotspot
+2.    ```bash cd antigen-antibody-residue-hotspot
 
 3. python analysis_script.py
 
