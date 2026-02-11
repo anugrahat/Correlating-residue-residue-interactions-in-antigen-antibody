@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# GROMACS large files
+*.gro
+*.trr
+*.xtc
+*.tpr
+*.cpt
+*.edr
+*.log
+*.ndx
+*.xvg
+*.top
+*.itp
+*.mdp
+
+# Simulation output directories
+work/
+pull/
+pull_rep*/
+logs/
+
+# Images (optional outputs)
+*.png
+
+# Large data
+*.csv
+
+# OS
+.DS_Store
