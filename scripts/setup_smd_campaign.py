@@ -11,6 +11,7 @@ This script does not submit jobs. It creates per-mutation folders at
 from __future__ import annotations
 
 import argparse
+import random
 import re
 import shutil
 from dataclasses import dataclass
@@ -619,6 +620,117 @@ comm-grps       = System
     (folder / "md10.mdp").write_text(md_text)
 
 
+def write_replicate_mdp(folder: Path, rep: int, seed: int) -> None:
+    """Write a pull MDP with gen_vel=yes and a unique seed for this replicate."""
+    rep_dir = folder / f"pull_rep{rep}"
+    rep_dir.mkdir(parents=True, exist_ok=True)
+    mdp_text = f"""title       = Umbrella pulling simulation - replicate {rep}
+define      = -DPOSRES_B
+integrator  = md
+dt          = 0.002
+tinit       = 0
+nsteps      = 2500000
+nstcomm     = 10
+nstxout     = 5000
+nstvout     = 5000
+nstfout     = 500
+nstxtcout   = 500
+nstenergy   = 500
+constraint_algorithm    = lincs
+constraints             = h-bonds
+continuation            = no
+cutoff-scheme   = Verlet
+nstlist         = 20
+ns_type         = grid
+rlist           = 1.4
+rcoulomb        = 1.4
+rvdw            = 1.4
+coulombtype     = PME
+fourierspacing  = 0.12
+fourier_nx      = 0
+fourier_ny      = 0
+fourier_nz      = 0
+pme_order       = 4
+ewald_rtol      = 1e-5
+optimize_fft    = yes
+Tcoupl      = Nose-Hoover
+tc_grps     = Protein   Non-Protein
+tau_t       = 1.0       1.0
+ref_t       = 310       310
+Pcoupl          = Parrinello-Rahman
+pcoupltype      = isotropic
+tau_p           = 2.0
+compressibility = 4.5e-5
+ref_p           = 1.0
+refcoord_scaling = com
+gen_vel     = yes
+gen_temp    = 310
+gen_seed    = {seed}
+pbc     = xyz
+DispCorr    = EnerPres
+pull                    = yes
+pull_ncoords            = 1
+pull_ngroups            = 2
+pull_group1_name        = chauA
+pull_group2_name        = rest
+pull_coord1_type        = umbrella
+pull_coord1_geometry    = distance
+pull_coord1_dim         = N Y N
+pull_coord1_groups      = 1 2
+pull_coord1_start       = yes
+pull_coord1_rate        = 0.001
+pull_coord1_k           = 1350
+"""
+    (rep_dir / f"umb2_rep{rep}.mdp").write_text(mdp_text)
+
+
+def write_replicate_sbatch(
+    folder: Path,
+    rep: int,
+    gmxlib: str = DEFAULT_GMXLIB,
+) -> None:
+    """Write a standalone sbatch script for a pull replicate (1 GPU)."""
+    script = f"""#!/bin/bash
+#SBATCH --job-name={folder.name}_rep{rep}
+#SBATCH --account=ahnlab
+#SBATCH --partition=gpu-ahn
+#SBATCH --chdir={folder}
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=16
+#SBATCH --gres=gpu:1
+#SBATCH --time=120:00:00
+#SBATCH --mail-type=BEGIN,END,FAIL
+#SBATCH --mail-user=anuthyagatur@ucdavis.edu
+
+set -euo pipefail
+module load gromacs/2024
+if command -v gmx_mpi >/dev/null 2>&1; then GMX=gmx_mpi; else GMX=gmx; fi
+RUN1="srun --ntasks=1"
+PULL_GPU_FLAGS="-nb gpu -bonded gpu -pme gpu"
+export GMXLIB="{gmxlib}"
+
+echo "[INFO] Replicate {rep} pull run for {folder.name}"
+
+if [ -f pull_rep{rep}/replica2.gro ]; then
+  echo "[SKIP] Pull mdrun already done"
+else
+  echo "[RUN]  grompp + mdrun for replicate {rep}"
+  $RUN1 $GMX grompp -f pull_rep{rep}/umb2_rep{rep}.mdp -r pull/npt.gro -c pull/npt.gro \\
+      -n pull/rbd_2_reg.ndx -p pull/pull.top -o pull_rep{rep}/replica2.tpr -maxwarn 20
+  srun $GMX mdrun -v -s pull_rep{rep}/replica2.tpr -deffnm pull_rep{rep}/replica2 \\
+      -pf pull_rep{rep}/replica2_pullf.xvg -px pull_rep{rep}/replica2_pullx.xvg $PULL_GPU_FLAGS
+fi
+
+echo "[DONE] Replicate {rep} outputs:"
+echo "  pull_rep{rep}/replica2_pullf.xvg"
+echo "  pull_rep{rep}/replica2_pullx.xvg"
+"""
+    out = folder / f"run_pull_rep{rep}.sbatch"
+    out.write_text(script)
+    out.chmod(0o755)
+
+
 def setup_one(
     out_root: Path,
     base_pdb: Path,
@@ -627,6 +739,7 @@ def setup_one(
     antigen_res_count: int,
     force: bool,
     auto_align_script: Path | None = None,
+    replicates: int = 1,
 ) -> Path:
     folder = out_root / f"c1_{mutation.tag}"
     folder.mkdir(parents=True, exist_ok=True)
@@ -657,6 +770,13 @@ def setup_one(
     (folder / "mutation_mapping.txt").write_text(report)
     write_index_builder(folder)
     write_sbatch_script(folder, antigen_res_count, auto_align_script)
+
+    # Generate replicate pull scripts (rep2, rep3, ...) with different seeds
+    for rep in range(2, replicates + 1):
+        seed = random.randint(10000, 99999)
+        write_replicate_mdp(folder, rep, seed)
+        write_replicate_sbatch(folder, rep)
+
     return folder
 
 
@@ -678,6 +798,13 @@ def parse_args() -> argparse.Namespace:
         help="Path to auto_align_for_pull.py (default: alongside this script)",
     )
     p.add_argument("--antigen-chain", default="A")
+    p.add_argument(
+        "--replicates",
+        type=int,
+        default=1,
+        help="Number of pull replicates (default 1). Rep1 is the main pipeline. "
+             "Rep2+ get separate sbatch scripts with different initial velocities.",
+    )
     p.add_argument(
         "--force",
         action="store_true",
@@ -711,13 +838,23 @@ def main() -> None:
             antigen_res_count=antigen_res_count,
             force=args.force,
             auto_align_script=auto_align,
+            replicates=args.replicates,
         )
         created.append(folder)
 
     print("Created mutation folders:")
     for folder in created:
         print(f"  {folder}")
-        print(f"    submit: sbatch {folder / 'run_pipeline.sbatch'}")
+        print(f"    rep1: sbatch {folder / 'run_pipeline.sbatch'}")
+        for rep in range(2, args.replicates + 1):
+            print(f"    rep{rep}: sbatch --dependency=afterok:$MAIN_JOB {folder / f'run_pull_rep{rep}.sbatch'}")
+    if args.replicates > 1:
+        print(f"\nTo submit all replicates automatically:")
+        print(f"  for MUT_DIR in {' '.join(str(f) for f in created)}; do")
+        print(f"    MAIN_JOB=$(sbatch --parsable $MUT_DIR/run_pipeline.sbatch)")
+        for rep in range(2, args.replicates + 1):
+            print(f"    sbatch --dependency=afterok:$MAIN_JOB $MUT_DIR/run_pull_rep{rep}.sbatch")
+        print(f"  done")
 
 
 if __name__ == "__main__":
