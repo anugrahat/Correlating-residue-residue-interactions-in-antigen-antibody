@@ -107,19 +107,44 @@ def parse_mutation(spec: str) -> Mutation:
     return Mutation(wt=wt, global_resid=int(resid), mut=mut)
 
 
+def parse_mutation_spec(spec: str) -> List[Mutation] | None:
+    """Parse a mutation specification that may contain multiple mutations.
+
+    Supports:
+      - "WT"           -> None (wild-type, no mutations)
+      - "Y405N"        -> [Mutation(Y,405,N)]
+      - "D265N+F287W"  -> [Mutation(D,265,N), Mutation(F,287,W)]
+    """
+    spec = spec.strip().upper()
+    if spec == "WT":
+        return None
+    parts = spec.split("+")
+    return [parse_mutation(p) for p in parts]
+
+
+def mutation_spec_tag(mutations: List[Mutation] | None) -> str:
+    """Return a folder-safe tag for a mutation spec: 'WT' or 'D265N_F287W'."""
+    if mutations is None:
+        return "WT"
+    return "_".join(m.tag for m in mutations)
+
+
 def global_to_chain_resid(global_resid: int) -> Tuple[str, int]:
-    """Map regression/global antibody index (196..422) to PDB chain+resid.
+    """Map regression/global index to PDB chain+resid.
 
     Mapping used in your workflow:
+      1..195   = chain A residues 1..195  (antigen / RBD)
       196..302 = chain L residues 1..107
       303..422 = chain H residues 1..120
     """
+    if 1 <= global_resid <= 195:
+        return "A", global_resid
     if 196 <= global_resid <= 302:
         return "L", global_resid - 195
     if 303 <= global_resid <= 422:
         return "H", global_resid - 302
     raise ValueError(
-        f"Global residue {global_resid} is outside antibody range 196..422."
+        f"Global residue {global_resid} is outside range 1..422."
     )
 
 
@@ -130,17 +155,16 @@ def _residue_key(line: str) -> Tuple[str, int, str]:
     return chain, resid, icode
 
 
-def mutate_pdb(
-    pdb_in: Path,
-    pdb_out: Path,
+def mutate_pdb_single(
+    lines: List[str],
     mutation: Mutation,
     force: bool = False,
-) -> Tuple[str, int, str, str]:
+) -> List[str]:
+    """Apply a single mutation to PDB lines in memory. Returns new lines."""
     chain, local_resid = global_to_chain_resid(mutation.global_resid)
     target_key = (chain, local_resid, " ")
     mut_res3 = AA1_TO_3[mutation.mut]
 
-    lines = pdb_in.read_text().splitlines(keepends=True)
     found_resname = None
     out_lines: List[str] = []
 
@@ -167,7 +191,7 @@ def mutate_pdb(
 
     if found_resname is None:
         raise ValueError(
-            f"Did not find residue chain {chain} resid {local_resid} in {pdb_in}."
+            f"Did not find residue chain {chain} resid {local_resid}."
         )
 
     found_wt = AA3_TO_1.get(found_resname, "?")
@@ -178,8 +202,41 @@ def mutate_pdb(
             "Use --force to override."
         )
 
-    pdb_out.write_text("".join(out_lines))
-    return chain, local_resid, found_resname, mut_res3
+    return out_lines
+
+
+def mutate_pdb(
+    pdb_in: Path,
+    pdb_out: Path,
+    mutations: List[Mutation],
+    force: bool = False,
+) -> List[Tuple[str, int, str, str]]:
+    """Apply one or more mutations to a PDB file.
+
+    Returns a list of (chain, local_resid, found_res3, mut_res3) per mutation.
+    """
+    lines = pdb_in.read_text().splitlines(keepends=True)
+    results = []
+
+    for mutation in mutations:
+        chain, local_resid = global_to_chain_resid(mutation.global_resid)
+        mut_res3 = AA1_TO_3[mutation.mut]
+
+        # Find the WT residue before mutating
+        found_resname = None
+        for line in lines:
+            if not line.startswith(("ATOM", "HETATM")):
+                continue
+            key = _residue_key(line)
+            if key[0] == chain and key[1] == local_resid:
+                found_resname = line[17:20].strip()
+                break
+
+        lines = mutate_pdb_single(lines, mutation, force=force)
+        results.append((chain, local_resid, found_resname or "???", mut_res3))
+
+    pdb_out.write_text("".join(lines))
+    return results
 
 
 def write_sbatch_script(
@@ -734,14 +791,15 @@ echo "  pull_rep{rep}/replica2_pullx.xvg"
 def setup_one(
     out_root: Path,
     base_pdb: Path,
-    mutation: Mutation,
+    mutations: List[Mutation] | None,
     template_dir: Path,
     antigen_res_count: int,
     force: bool,
     auto_align_script: Path | None = None,
     replicates: int = 1,
 ) -> Path:
-    folder = out_root / f"c1_{mutation.tag}"
+    tag = mutation_spec_tag(mutations)
+    folder = out_root / f"c1_{tag}"
     folder.mkdir(parents=True, exist_ok=True)
 
     inputs = folder / "inputs"
@@ -753,20 +811,35 @@ def setup_one(
     write_md10_mdp(inputs)
 
     mut_pdb = folder / "mutant_input.pdb"
-    chain, local_resid, found_res3, mut_res3 = mutate_pdb(
-        pdb_in=base_pdb, pdb_out=mut_pdb, mutation=mutation, force=force
-    )
+    if mutations is None:
+        # Wild-type: just copy the base PDB unchanged
+        shutil.copy2(base_pdb, mut_pdb)
+        report = (
+            "mutation=WT (no mutations)\n"
+            f"antigen_residue_count={antigen_res_count}\n"
+            "pull_groups=chauA(restraint group1, antigen),rest(group2, antibody)\n"
+        )
+    else:
+        results = mutate_pdb(
+            pdb_in=base_pdb, pdb_out=mut_pdb, mutations=mutations, force=force
+        )
+        report_lines = []
+        for i, (mutation, (chain, local_resid, found_res3, mut_res3)) in enumerate(
+            zip(mutations, results)
+        ):
+            prefix = f"mutation{i+1}" if len(mutations) > 1 else "mutation"
+            report_lines.append(f"{prefix}={mutation.tag}")
+            report_lines.append(f"{prefix}_global_resid={mutation.global_resid}")
+            report_lines.append(f"{prefix}_mapped_chain={chain}")
+            report_lines.append(f"{prefix}_mapped_chain_resid={local_resid}")
+            report_lines.append(f"{prefix}_found_res3={found_res3}")
+            report_lines.append(f"{prefix}_target_res3={mut_res3}")
+        report_lines.append(f"antigen_residue_count={antigen_res_count}")
+        report_lines.append(
+            "pull_groups=chauA(restraint group1, antigen),rest(group2, antibody)"
+        )
+        report = "\n".join(report_lines) + "\n"
 
-    report = (
-        f"mutation={mutation.tag}\n"
-        f"global_resid={mutation.global_resid}\n"
-        f"mapped_chain={chain}\n"
-        f"mapped_chain_resid={local_resid}\n"
-        f"found_res3={found_res3}\n"
-        f"target_res3={mut_res3}\n"
-        f"antigen_residue_count={antigen_res_count}\n"
-        "pull_groups=chauA(restraint group1, antigen),rest(group2, antibody)\n"
-    )
     (folder / "mutation_mapping.txt").write_text(report)
     write_index_builder(folder)
     write_sbatch_script(folder, antigen_res_count, auto_align_script)
@@ -786,7 +859,8 @@ def parse_args() -> argparse.Namespace:
         "--mutations",
         nargs="+",
         default=DEFAULT_MUTATIONS,
-        help="Global numbering mutations, e.g. Y405N Y406W",
+        help="Mutation specs: single (Y405N), multi (D265N+F287W), or WT. "
+             "Use + to combine mutations on the same system.",
     )
     p.add_argument("--base-pdb", type=Path, default=DEFAULT_BASE_PDB)
     p.add_argument("--out-root", type=Path, default=DEFAULT_OUT_ROOT)
@@ -822,18 +896,18 @@ def main() -> None:
         raise FileNotFoundError(f"Missing template directory: {args.template_dir}")
 
     antigen_res_count = count_antigen_residues(args.base_pdb, args.antigen_chain)
-    mutations = [parse_mutation(m) for m in args.mutations]
+    mutation_specs = [parse_mutation_spec(m) for m in args.mutations]
 
     auto_align = args.auto_align_script.resolve()
     if not auto_align.exists():
         raise FileNotFoundError(f"Missing auto-align script: {auto_align}")
 
     created = []
-    for mutation in mutations:
+    for mutations in mutation_specs:
         folder = setup_one(
             out_root=args.out_root,
             base_pdb=args.base_pdb,
-            mutation=mutation,
+            mutations=mutations,
             template_dir=args.template_dir,
             antigen_res_count=antigen_res_count,
             force=args.force,

@@ -99,46 +99,166 @@ Numbering reminder:
   - `GRO residue 405` is a different site (`chain L residue 91`, `ARG`)
 - Conclusion: checking `TYR` at `GRO 405` does not mean the `Y405N` mutation failed.
 
-### Single mutants to test first
+## Mutation Design Strategy (Elastic Net Regression)
+
+### How we identify mutation targets
+1. **Time-resolved contact frequency analysis**: From equilibrium MD trajectories, compute per-frame residue-residue contact frequencies between antigen and antibody.
+2. **Elastic net regression**: Regress contact frequencies against binding energy (interaction energy). The beta coefficient for each contact pair tells how much that contact contributes to binding:
+   - **Negative beta** = contact stabilizes binding (favorable)
+   - **Positive beta** = contact destabilizes binding (unfavorable)
+3. **Aggregate by antibody residue**: Sum `|beta × MeanFreq|` across all antigen partners to rank antibody residues by importance.
+   - Data source: `c1_from_existing_regression_antibody_targets.csv`
+
+### Residue classification (from regression)
+
+| Classification | NetFavorability | Meaning | Action |
+|---|---|---|---|
+| **Hot spot** | > 70 | Already optimal, dominant binding contributor | DO NOT mutate |
+| **Warm spot** | 20–70 | Suboptimal contacts, room for improvement | Mutate (conservative substitutions) |
+| **Lukewarm** | 5–20 | Moderate signal, many contact pairs | Consider for affinity maturation |
+| **Cold (many pairs)** | 0, but #pairs ≥ 8 | Sits at interface but contributes nothing | Best targets for NEW contacts |
+| **Destabilizing** | < 0 | Actively hurts binding | Remove/shrink side chain |
+
+### Key insight: regression identifies important CONTACTS, not mutation targets
+- **Hot spots** (Y404, Y405, Y406, Y227, F287, R249, R374) are already optimal — mutating them destroys binding
+- **Warm spots** (S262, D265, A246) have suboptimal contacts — mutations here aim to improve existing interactions
+- **Cold spots with many pairs** have untapped potential — the residue touches the antigen but doesn't contribute. A bulkier/aromatic substitution could CREATE new productive contacts
+
+### Ranked antibody interface residues
+
+| Global | Chain | AA | NetFav | #Pairs | Class |
+|---|---|---|---|---|---|
+| 406 | H:104 | TYR | 165.6 | 22 | HOT |
+| 227 | L:32 | TYR | 119.9 | 23 | HOT |
+| 404 | H:102 | TYR | 104.8 | 28 | HOT |
+| 405 | H:103 | TYR | 86.0 | 19 | HOT |
+| 287 | L:92 | PHE | 76.7 | 20 | HOT |
+| 249 | L:54 | ARG | 74.5 | 13 | HOT |
+| 374 | H:72 | ARG | 74.0 | 12 | HOT |
+| 262 | L:67 | SER | 50.8 | 24 | WARM |
+| 251 | L:56 | THR | 39.8 | 9 | WARM |
+| 265 | L:70 | ASP | 24.3 | 18 | WARM |
+| 246 | L:51 | ALA | 23.6 | 24 | WARM |
+| 289 | L:94 | TRP | 21.1 | 13 | WARM |
+| 226 | L:31 | ASN | 17.8 | 23 | lukewarm |
+| 245 | L:50 | ASP | 16.2 | 21 | lukewarm |
+| 403 | H:101 | THR | 8.0 | 22 | lukewarm |
+| 288 | L:93 | ASN | 0 | 18 | cold (many pairs) |
+| 248 | L:53 | ASN | 0 | 17 | cold (many pairs) |
+| 264 | L:69 | THR | 0 | 14 | cold (many pairs) |
+| 260 | L:65 | SER | 0 | 12 | cold (many pairs) |
+| 225 | L:30 | HIS | 0 | 16 | cold (many pairs) |
+| 244 | L:49 | PHE | -16.3 | 9 | DESTABILIZING |
+
+## Regression Data Sources
+
+| System | Trajectory | Interaction Energy CSV | Min IE (kJ/mol) | Notes |
+|--------|-----------|----------------------|-----------------|-------|
+| **Wuhan-87g7** | 50ns | `/home/anugraha/omicron_pulling/bigger_box/50ns/replica_50ns_pos/output_data/new_analysis/interaction_energy.csv` | -849.9 | C1 antibody + Wuhan RBD; avg of 4 replicas (C_SR+LJ_SR) |
+| **Omicron-87g7** | 100ns | `/home/anugraha/omicron_pulling/bigger_box/100ns/replica_100ns_pos/output_data_om/new_analysis/interaction_energy.csv` | -905.2 | C1 antibody + Omicron RBD |
+
+Labels confirmed from: `/home/anugraha/omicron_pulling/bigger_box/100ns/replica_100ns_pos/output_data_om/new_analysis/count.py`
+
+Elastic net coefficients (used for mutation design):
+- C1 (50ns): `/home/anugraha/omicron_pulling/bigger_box/50ns/replica_50ns_pos/output_data/new_analysis/elastic_net_coefficients_and_meanFreq.csv`
+- Omicron (100ns): `/home/anugraha/omicron_pulling/bigger_box/100ns/replica_100ns_pos/output_data_om/new_analysis/elastic_net_coefficients_and_meanFreq.csv`
+
+Aggregated antibody targets (from C1 regression): `/home/anugraha/antibody_optimization/c1_from_existing_regression_antibody_targets.csv`
+
+## WT Baseline (C1-87g7)
+
+Data from: `/home/anugraha/c1_87g7/rot_120_corrected/bigger_box/md2/`
+
+| Replica | Smoothed Peak (kJ/mol/nm) |
+|---|---|
+| eq60/80ns_pos | 940 |
+| eq80/80ns_pos | 812 |
+| eq45/80ns_pos | 748 |
+| eq100/100ns | 723 |
+| **Mean ± Std** | **806 ± 97** |
+
+## Round 1: Warm-Spot Single Mutations (completed)
+
+Strategy: mutate warm spots with conservative substitutions to improve suboptimal contacts.
+
+| Mutation | Global | Chain | Rationale | Peak Force (kJ/mol/nm) | vs WT (806) |
+|---|---|---|---|---|---|
+| D265N | 265 | L:70 | Remove negative charge | 795 ± 196 | ~equal |
+| F287W | 287 | L:92 | Conservative Phe→Trp | 671 ± 40 | -17% |
+| Y405N | 405 | H:103 | Test hot spot (control) | 572 ± 29 | -29% |
+| A246Y | 246 | L:51 | Add aromatic at small site | 480 ± 47 | -40% |
+| S262Y | 262 | L:67 | Add aromatic at polar site | 454 ± 101 | -44% |
+
+**Conclusion**: No single warm-spot mutation exceeded WT. Y405N confirmed as hot spot (any substitution weakens binding). D265N is closest to WT but high variance.
+
+## Round 2: Affinity Maturation (in progress)
+
+### Strategy shift
+Round 1 showed that improving existing contacts (warm spots) is not enough — those contacts are already functional, and mutations tend to disrupt more than they gain. Two new approaches:
+
+**Approach 1 — Combine best singles**: D265N and F287W target different interface regions (L:70 vs L:92). If effects are additive, the double mutant could exceed WT.
+
+**Approach 2 — Cold spots with many pairs (untapped potential)**: Residues that sit at the interface and make many antigen contacts but contribute ZERO to binding energy. The current residue makes geometrically suboptimal contacts. A bulkier/aromatic substitution could convert dead contacts into productive ones.
+
+**Approach 3 — Lukewarm positions with high contact count**: Residues with moderate signal but disproportionately many contact pairs (e.g., T403 has 22 pairs but only 8.0 net favorability — massive untapped potential).
+
+### Round 2 Tier 1 mutations (submitted)
+
+| Mutation | Type | Rationale |
+|---|---|---|
+| D265N+F287W | double | Best two Round 1 singles combined |
+| T403Y | single (lukewarm→aromatic) | H:101, 22 pairs but only 8.0 net fav; Thr→Tyr adds aromatic+OH |
+| N248Y | single (cold→aromatic) | L:53, 17 pairs, zero signal; Asn→Tyr to create new contacts |
+
+### Round 2 Tier 2 mutations (pending results)
+
+| Mutation | Rationale |
+|---|---|
+| N226Y | L:31, 23 pairs, 17.8 net fav; Asn→Tyr at lukewarm position with most contact pairs |
+| F244A | L:49, net fav -16.3; remove destabilizing bulky aromatic |
+| N288W | L:93, 18 pairs, zero signal; extend aromatic cluster near F287 |
+| T264Y | L:69, 14 pairs, zero signal; adjacent to D265 |
+
+### Pipeline features
+- Multi-mutation support: `--mutations D265N+F287W` (+ separator for combos on same system)
+- WT baseline: `--mutations WT` (copies base PDB unchanged)
+- Replicates: `--replicates 3` generates rep2/rep3 with different gen_seed, separate sbatch scripts
+- Folder naming: `c1_D265N_F287W`, `c1_WT`, etc.
+
+### Single mutants to test first (original list, partially superseded by Round 1/2)
 Tier 1 (highest priority):
 1. `Y103H` (global `Y405H`)
-2. `Y103N` (global `Y405N`)
+2. `Y103N` (global `Y405N`) — tested, -29% vs WT
 3. `Y103Q` (global `Y405Q`)
 4. `Y104W` (global `Y406W`)
 5. `Y102W` (global `Y404W`)
-6. `F92W` (global `F287W`)
-7. `D70N` (global `D265N`)
-8. `S67Y` (global `S262Y`)
+6. `F92W` (global `F287W`) — tested, -17% vs WT
+7. `D70N` (global `D265N`) — tested, ~equal to WT
+8. `S67Y` (global `S262Y`) — tested, -44% vs WT
 
 Tier 2 (if needed after Tier 1):
-1. `A51Y` (global `A246Y`)
+1. `A51Y` (global `A246Y`) — tested, -40% vs WT
 2. `Y32W` (global `Y227W`)
 3. `W94Y` (global `W289Y`)
 4. `N57Y` (global `N359Y`)
 
-Controls to keep in the same campaign:
-1. WT (`Y103`)
-2. `Y103W`
-3. `Y103F`
+Controls:
+1. WT (`Y103`) — baseline: 806 ± 97 kJ/mol/nm
+2. `Y103W` — previously tested, no improvement
+3. `Y103F` — previously tested, weaker binding
 
 ### Multi-mutant panel (build only from single winners)
 Start with double mutants:
-1. `Y103H + Y104W`
-2. `Y103N + Y102W`
-3. `Y103Q + F92W`
-4. `Y102W + Y104W`
-5. `Y104W + F92W`
-
-Then triple mutants:
-1. `Y103H + Y104W + F92W`
-2. `Y103N + Y102W + F92W`
-3. `Y103Q + Y102W + Y104W`
+1. `D265N + F287W` — **submitted (Round 2 Tier 1)**
+2. Best Round 2 single + D265N
+3. Best Round 2 single + F287W
 
 ### Execution workflow
 1. Run Tier 1 singles first with identical pulling settings and replicate count vs C1 baseline.
 2. Rank by consistent improvement in rupture-force profile and separation work (not one-frame peaks only).
 3. Promote top 2-3 singles into double mutants; do not jump directly to 4-way combinations.
 4. If all `Y103` variants fail, pivot to `102/104/92` only and continue combination design there.
+5. If warm-spot singles don't improve, shift to cold-spot aromatic additions (Round 2 approach).
 
 ## Automated Workflow
 
@@ -420,3 +540,158 @@ Equivalent `gmx editconf` rotation for the same interface-perpendicular alignmen
 - Vector-target decomposition error check: `0.000000 deg`
 - Generated command file:
   - `/home/anugraha/c1_Y405N/view_cli_interface_align/gmx_editconf_rotate_command.txt`
+
+## SMD Pulling Analysis (Work Integrals)
+
+### Methodology
+Instead of using peak rupture force (noisy, single-frame measure), we computed **work integrals** W = integral(F dx) using trapezoidal integration of pullf.xvg force-distance curves. This integrates over the full separation process and is more robust than peak force alone.
+
+We also computed **Jarzynski PMF** using ΔG = -kT ln⟨exp(-W/kT)⟩ across replicates, though this is exponentially dominated by the lowest-work replicate and unreliable with <30 replicates.
+
+### Replicates completed
+- WT: 10 replicates (rep1-10)
+- D265N: 10 replicates
+- F287W: 10 replicates
+- Y157A: 6 replicates (negative control — alanine scan of antigen residue)
+- D265N+F287W: 6 replicates (+ rep7-10 submitted)
+- T403Y: 6 replicates (+ rep7-10 submitted)
+- S262Y: 6 replicates (+ rep7-10 submitted)
+- N248Y: 6 replicates (+ rep7-10 submitted)
+- A246Y: 6 replicates (+ rep7-10 submitted)
+
+### Work integral results (kJ/mol)
+
+| Mutation | Mean W | SEM | n | vs WT (%) | p-value |
+|----------|--------|-----|---|-----------|---------|
+| D265N | 715 | 34 | 10 | +90% | <0.001 |
+| F287W | 551 | 27 | 10 | +46% | 0.002 |
+| T403Y | 506 | 24 | 6 | +34% | 0.001 |
+| S262Y | 478 | 39 | 6 | +27% | 0.040 |
+| D265N+F287W | 464 | 41 | 6 | +23% | 0.080 |
+| N248Y | 449 | 29 | 6 | +19% | 0.070 |
+| WT | 377 | 22 | 10 | — | — |
+| Y157A | 332 | 27 | 6 | -12% | 0.100 |
+| A246Y | 312 | 36 | 6 | -17% | 0.140 |
+
+### SMD limitations identified
+- **Noise floor ±15-20%**: Even with n=10, WT spans 260-480 kJ/mol. Only D265N (+90%) and F287W (+46%) are reliably above noise.
+- **SMD measures nonequilibrium mechanical resistance**, not equilibrium binding affinity. Fast pulling (0.001 nm/ps) means most work is dissipated, not thermodynamic.
+- Mid-tier mutations (T403Y +34%, S262Y +27%) overlap with WT variance — cannot be reliably ranked.
+- Y157A negative control showed only -12% (not statistically significant with WT at n=10), despite being expected to strongly disrupt binding.
+- Conclusion: SMD alone cannot resolve moderate binding differences (1-3 kcal/mol). Switched to MM-GBSA for reliable ranking.
+
+### Plots generated
+All in `/home/anugraha/antibody_optimization/`:
+- `plot1_work_integral.png` — Bar chart with significance stars and individual data points
+- `plot2_force_profiles.png` — Smoothed average force profiles per mutation
+- `plot3_jarzynski_pmf.png` — Jarzynski PMF with 95% bootstrap CI
+- `plot4_cumulative_work.png` — Cumulative work ± SEM
+- `plot5_violin_distribution.png` — Violin/distribution plot
+- `plot6_negative_control.png` — Y157A vs top hits focused comparison
+- `plot7_significance_heatmap.png` — Pairwise t-test significance heatmap
+- `y157a_full_comparison.png` — 3-panel Y157A vs WT with all 6 reps
+
+## MM-GBSA Analysis (Equilibrium Binding Free Energy)
+
+### Why MM-GBSA
+SMD pulling is too noisy to rank mutations with moderate affinity differences. MM-GBSA uses the **existing 10ns equilibrium trajectories** (md10.trr from Phase 1) to compute binding free energy without additional simulations.
+
+### Method
+- **Tool**: `gmx_MMPBSA` v1.6.3 (wrapper around AmberTools MMPBSA.py)
+- **Approach**: Single-trajectory MM-GBSA (internal energies cancel exactly)
+- **Solvent model**: GB (igb=5, modified Onufriev-Bashford-Case)
+- **Salt**: 0.15 M (saltcon=0.150)
+- **Frames**: 90 frames from 10ns trajectory (startframe=1, endframe=900, interval=10)
+  - Last 1ns excluded due to structural instability in some systems
+- **Groups**: Antigen (residues 1-194, index group 17) vs Antibody (residues 195-421, index group 18)
+
+### Setup procedure (for each mutation)
+```bash
+module load amber/24
+module load gromacs/2024
+cd /home/anugraha/c1_<MUT>/work
+
+# 1. Fix ion names (GROMACS amber14sb uses NA/CL, topology has Na/Cl)
+cp mutant_GMX.top mutant_GMX.top.bak
+sed -i 's/^Na /NA /g; s/^Cl /CL /g' mutant_GMX.top
+
+# 2. Fix PBC-broken molecules (prevents sander bond energy overflow)
+printf 'Protein\nSystem\n' | gmx_mpi trjconv -f md10.trr -s md10.tpr -o md10_noPBC.trr -pbc mol -center
+
+# 3. Create index file with Antigen (r1-194) and Antibody (r195-421) groups
+# -> mmpbsa_index.ndx (groups 17 and 18)
+
+# 4. Create input file (mmpbsa.in):
+# &general
+#   startframe=1, endframe=900, interval=10,
+#   verbose=2,
+# /
+# &gb
+#   igb=5, saltcon=0.150,
+# /
+
+# 5. Run
+/home/anugraha/.local/bin/gmx_MMPBSA -O -i mmpbsa.in -cs md10.tpr \
+    -ci mmpbsa_index.ndx -cg 18 17 -ct md10_noPBC.trr -cp mutant_GMX.top -nogui
+```
+
+### Critical fixes discovered
+1. **Ion name case mismatch**: `mutant_GMX.top` has `Na`/`Cl` in `[ molecules ]` but amber14sb expects `NA`/`CL`. Fix: `sed -i 's/^Na /NA /g; s/^Cl /CL /g' mutant_GMX.top`
+2. **PBC-broken molecules**: Raw md10.trr has molecules broken across periodic boundaries, causing sander BOND energy overflow (`*************`). Fix: `trjconv -pbc mol -center` to create md10_noPBC.trr
+3. **Late frame instability**: Some systems (especially WT) have structural instability in last 1ns. Fix: `endframe=900` (use 90 frames instead of 100)
+
+### MM-GBSA results
+
+| Mutation | ΔG_bind (kcal/mol) | SEM | ΔΔG vs WT | Interpretation |
+|----------|-------------------|-----|-----------|----------------|
+| D265N | -64.73 | 1.45 | -39.4 | **Best single mutant** |
+| F287W | -58.99 | 1.44 | -33.7 | **Strong improvement** |
+| D265N+F287W | -50.82 | 0.88 | -25.5 | Worse than either single (paradox) |
+| S262Y | -40.28 | 1.20 | -15.0 | Significant improvement |
+| N248Y | -36.20 | 1.01 | -10.9 | Moderate improvement |
+| A246Y | -31.41 | 0.81 | -6.1 | Mild improvement |
+| **WT** | **-25.31** | **0.86** | **—** | **Baseline** |
+| T403Y | -21.08 | 1.57 | +4.2 | Slightly worse (SMD false positive) |
+| Y157A | -13.73 | 1.49 | +11.6 | Confirmed negative control |
+
+Result files: `/home/anugraha/c1_*/work/FINAL_RESULTS_MMPBSA.dat`
+
+### Key findings
+
+1. **D265N is the top performer** (ΔΔG = -39.4 kcal/mol): Removing the negative charge at L:70 (Asp→Asn) dramatically improves binding. This was a warm spot in the regression with moderate signal — the charge removal creates much better electrostatic complementarity at the interface.
+
+2. **F287W is second best** (ΔΔG = -33.7 kcal/mol): Conservative Phe→Trp at L:92, a hot spot. The larger indole ring extends the aromatic platform and makes additional van der Waals contacts.
+
+3. **Double mutant paradox**: D265N+F287W (-50.82) is **worse** than either D265N (-64.73) or F287W (-58.99) alone. Energy decomposition shows electrostatic contribution drops from -86.80 (D265N alone) to -34.14 (double), suggesting the two mutations cause electrostatic interference when combined. The D265N charge removal and F287W steric change are not independent — they share a coupled electrostatic network.
+
+4. **S262Y and N248Y are real hits** (ΔΔG = -15.0 and -10.9): SMD couldn't resolve these (overlapped with WT noise), but MM-GBSA clearly shows improvement. S262Y adds aromatic at warm spot L:67 (24 contact pairs). N248Y adds aromatic at cold spot L:53 (17 pairs, zero regression signal → new contacts created).
+
+5. **T403Y is a false positive**: SMD ranked it at +34% improvement, but MM-GBSA shows it's slightly worse than WT (ΔΔG = +4.2). SMD measures mechanical resistance during nonequilibrium pulling, not equilibrium binding affinity — Tyr at H:101 may resist physical separation (steric) without actually improving thermodynamic binding.
+
+6. **A246Y reversal**: SMD showed -17% (worse than WT), but MM-GBSA shows -31.41 (better by 6.1 kcal/mol). Different properties being measured — SMD pathway may not sample the relevant binding mode.
+
+7. **Y157A negative control validated**: ΔG = -13.73 vs WT -25.31 (ΔΔG = +11.6 kcal/mol). Alanine substitution at the antigen hotspot Y157 dramatically weakens binding, confirming MM-GBSA sensitivity. This mutation was unresolvable by SMD (only -12%, p=0.10).
+
+### SMD vs MM-GBSA ranking comparison
+
+| Rank | SMD (work integral) | MM-GBSA (ΔG_bind) |
+|------|--------------------|--------------------|
+| 1 | D265N (+90%) | D265N (-39.4) |
+| 2 | F287W (+46%) | F287W (-33.7) |
+| 3 | T403Y (+34%) | S262Y (-15.0) |
+| 4 | S262Y (+27%) | N248Y (-10.9) |
+| 5 | D265N+F287W (+23%) | A246Y (-6.1) |
+| 6 | N248Y (+19%) | WT (baseline) |
+| 7 | WT (baseline) | T403Y (+4.2) |
+| 8 | Y157A (-12%) | Y157A (+11.6) |
+| 9 | A246Y (-17%) | D265N+F287W (-25.5)* |
+
+*D265N+F287W is still better than WT in absolute terms but worse than either single — an anti-cooperative double mutant.
+
+Top two (D265N, F287W) agree between methods. Mid-tier ranking differs significantly — MM-GBSA is more reliable for equilibrium binding affinity.
+
+### Recommended next steps
+1. **New double mutants**: Combine D265N with S262Y or N248Y (avoid F287W combo due to electrostatic interference)
+2. **Triple mutants**: If D265N+S262Y works, try D265N+S262Y+N248Y
+3. **Experimental validation**: D265N and F287W are the strongest candidates for wet-lab testing
+4. **Longer equilibrium MD**: 50-100ns trajectories would give more reliable MM-GBSA with better sampling
