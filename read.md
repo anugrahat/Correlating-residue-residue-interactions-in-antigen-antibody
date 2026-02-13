@@ -706,9 +706,24 @@ Testing double mutant combinations to find cooperative pairs.
 | D265N+N248Y | -45.58 | 1.00 | -20.3 | Worse than D265N (-64.73) | **Anti-cooperative** |
 | D265N+S262Y | -35.37 | 0.82 | -10.1 | Worse than D265N (-64.73) | **Anti-cooperative** |
 | F287W+N248Y | -28.44 | 6.36 | -3.1 | Worse than F287W (-58.99) | **Anti-cooperative** |
-| F287W+S262Y | — | — | — | Running (job 754578) | Pending |
+| F287W+S262Y | -32.59 | 1.04 | -7.3 | Worse than F287W (-42.26) | **Anti-cooperative** |
 
-**Pattern**: All D265N-based doubles are anti-cooperative — the charge removal at D265N disrupts a coupled electrostatic network that other mutations also depend on. F287W+N248Y is also anti-cooperative. Single mutants remain superior to all tested doubles.
+**Pattern**: ALL tested doubles are anti-cooperative. D265N-based doubles lose the most due to coupled electrostatic network disruption. F287W-based doubles (F287W+N248Y, F287W+S262Y) also anti-cooperative. Single mutants remain superior to all tested doubles. Double mutant strategy abandoned.
+
+## New Mutation Targets: Phase 1 + MM-GBSA (Round 3, from C1 WT Regression)
+
+Jobs submitted from new elastic net regression targets:
+
+| Mutation | Job ID | Status | ΔG_bind (kcal/mol) | SEM |
+|----------|--------|--------|---------------------|-----|
+| Y404W | 754630 | Running | — | — |
+| Y404H | 754631 | Running | — | — |
+| S258A | 754632 | Pending | — | — |
+| S258G | 754633 | Pending | — | — |
+| D245N | 754634 | Pending | — | — |
+
+Pipeline: Phase 1 (tleap → pdb2gmx → solvate → EM → NVT → NPT → 10ns MD) + MM-GBSA (gmx_MMPBSA, igb=5, 90 frames).
+Folders: `/home/anugraha/c1_{Y404W,Y404H,S258A,S258G,D245N}/`
 
 ## New Elastic Net Regression on C1 WT (10 Pulling Replicas)
 
