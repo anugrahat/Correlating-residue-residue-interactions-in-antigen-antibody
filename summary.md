@@ -172,3 +172,55 @@ D265N+F287W (-50.82) is worse than either D265N (-64.73) or F287W (-58.99) alone
 ## Summary: the story in one paragraph
 
 Elastic net regression on SMD pulling trajectories decomposes antibody-antigen binding into per-residue-pair contributions by correlating frame-by-frame contact frequency changes with interaction energy changes during forced separation. This classifies interface residues into hot spots (already optimal), warm spots (suboptimal contacts improvable by targeted substitutions), and cold spots (geometrically positioned but energetically silent, representing untapped potential for new contacts). Applied to the C1-87g7 antibody, the approach identified D265N (warm spot charge removal, ΔΔG = -39.4 kcal/mol) and F287W (conservative hot spot extension, ΔΔG = -33.7 kcal/mol) as strong affinity-improving mutations, validated the cold spot concept through N248Y (ΔΔG = -10.9 kcal/mol from a position with zero energetic signal), and revealed that double mutants exhibit systematic anti-cooperativity due to the coupled nature of the binding interface. The negative control Y157A confirmed assay sensitivity with +11.6 kcal/mol binding loss. Critically, the cold spot target class — invisible to traditional alanine scanning because there is nothing to lose — represents a novel avenue for affinity maturation that only emerges from the combination of regression-based energetic decomposition and geometric contact analysis.
+
+## File Paths and Scripts
+
+### Contact frequency computation
+- Script: `/home/anugraha/c1_87g7/rot_120_corrected/bigger_box/md2/eq80/replica_80ns_pos/heat_count_surf.py`
+- Also at: `/home/anugraha/omicron_pulling/bigger_box/50ns/replica_50ns_pos/heat_count_surf.py`
+
+### Pulling simulation replicas (used for regression)
+- Replica 1 (eq0ns): `/home/anugraha/omicron_pulling/bigger_box/50ns/replica_50ns_pos/`
+  - Contact data: `frame_residuepair_interaction_frequencies.dat`
+  - Energy: `/home/anugraha/c1_87g7/rot_120_corrected/bigger_box/replica_0ns_pos/C_SR.xvg`, `LJ_SR.xvg`
+- Replica 2 (eq80ns): `/home/anugraha/c1_87g7/rot_120_corrected/bigger_box/md2/eq80/replica_80ns_pos/`
+  - Contact data: `output_data/frame_residuepair_interaction_frequencies.dat`
+  - Energy: `C_SR.xvg`, `LJ_SR.xvg`
+- Replica 3 (eq60ns): `/home/anugraha/c1_87g7/rot_120_corrected/bigger_box/md2/eq60/replica_80ns_pos/`
+  - Contact data: `output_data/frame_residuepair_interaction_frequencies.dat`
+  - Energy: `C_SR.xvg`, `LJ_SR.xvg`
+- Replica 4 (eq100ns): `/home/anugraha/c1_87g7/rot_120_corrected/bigger_box/md2/eq100/replica_100ns/`
+  - Contact data: `output_data/frame_residuepair_interaction_frequencies.dat`
+  - Energy: `C_SR.xvg`, `LJ_SR.xvg`
+
+### Averaging script (4 replicas → averaged CSVs)
+- Script: `/home/anugraha/omicron_pulling/bigger_box/50ns/replica_50ns_pos/output_data/average3.py`
+- Output: `interaction_energy.csv`, `average_frequency.csv`
+
+### Elastic net regression
+- Script: `/home/anugraha/omicron_pulling/bigger_box/50ns/replica_50ns_pos/output_data/new_analysis/average_11_avg_f_rbd_2.py`
+- Input: `interaction_energy.csv`, `average_frequency.csv` (in same directory)
+- Output: `elastic_net_coefficients_and_meanFreq.csv`
+- Per-residue sums: `sum_of_beta_meanFreq_by_firstResidue.csv`
+- Aggregated antibody targets: `/home/anugraha/antibody_optimization/c1_from_existing_regression_antibody_targets.csv`
+
+### New C1 WT pulling simulations (10 replicates)
+- Rep 1: `/home/anugraha/c1_WT/pull/` (replica2_pullf.xvg, replica2_pullx.xvg, replica2.edr)
+- Rep 2-10: `/home/anugraha/c1_WT/pull_rep{2..10}/` (same files)
+- Pipeline sbatch: `/home/anugraha/c1_WT/run_pipeline.sbatch`
+
+### MM-GBSA results (per mutation)
+- Results: `/home/anugraha/c1_*/work/FINAL_RESULTS_MMPBSA.dat`
+- PBC-corrected trajectories: `/home/anugraha/c1_*/work/md10_noPBC.trr`
+- Index files: `/home/anugraha/c1_*/work/mmpbsa_index.ndx`
+- Input: `/home/anugraha/c1_*/work/mmpbsa.in`
+
+### Mutation pipeline
+- Setup script: `/home/anugraha/antibody_optimization/scripts/setup_smd_campaign.py`
+- Auto-align: `/home/anugraha/antibody_optimization/scripts/auto_align_for_pull.py`
+- Base PDB: `/home/anugraha/antibody_optimization/c1_87g7.pdb`
+
+### Analysis plots
+- SMD work integral plots: `/home/anugraha/antibody_optimization/plot1-7_*.png`
+- Y157A comparison: `/home/anugraha/antibody_optimization/y157a_full_comparison.png`
+- Exit seminar figures: `/home/anugraha/antibody_optimization/figures/`
