@@ -730,20 +730,28 @@ Folders: `/home/anugraha/c1_{Y404W,Y404H,S258A,S258G,D245N}/`
 ### Methodology
 Repeated the elastic net regression analysis directly on the C1 WT pulling simulations (10 replicas) instead of the previous Wuhan/Omicron system (4 replicas). This provides a system-specific regression for the actual antibody-antigen pair being optimized.
 
-- **Data**: 10 pulling replicas, 5001 frames each
+**Note**: Initial analysis used truncated energy data (1860/5001 frames due to incomplete XVG extraction). Re-extracted all 10 replicas from EDR files and re-averaged to get full 5001-frame energy data. Regression below uses frames 1–1500 (focused on rupture event window).
+
+- **Data**: 10 pulling replicas, 5001 frames each (full energy data)
+- **Frame range**: 1–1500 (rupture event focus; cleaner signal than full 5001)
 - **Contact frequency**: SASA-filtered (0.5 nm², Shrake-Rupley on frame 0), atom-atom distance < 10 Å, count-based
 - **Interaction energy**: Coul-SR + LJ-SR between chauA (antigen) and rest (antibody) from energy reruns with group decomposition
-- **Regression**: ElasticNetCV (alpha=35.94, l1_ratio=0.70, R²=0.998)
-- **Features**: 542 residue pairs → 26 non-zero coefficients
+- **Regression**: ElasticNetCV (alpha=12.92, l1_ratio=0.90, R²=0.9978, RMSE=8.48)
+- **Features**: 548 residue pairs → 36 non-zero coefficients
 
 ### Data locations
 - Contact frequencies: `/home/anugraha/c1_WT/analysis/average_frequency.csv`
-- Interaction energy: `/home/anugraha/c1_WT/analysis/interaction_energy.csv`
-- Coefficients: `/home/anugraha/c1_WT/analysis/elastic_net_coefficients.csv`
-- NetFavorability: `/home/anugraha/c1_WT/analysis/net_favorability_by_residue.csv`
-- Figure: `/home/anugraha/antibody_optimization/figures/fig2_elastic_net_heatmap.png`
+- Interaction energy: `/home/anugraha/c1_WT/analysis/interaction_energy.csv` (5001 frames, re-extracted)
+- Coefficients: `/home/anugraha/c1_WT/analysis/elastic_net_coefficients_3000.csv` (1500-frame regression)
+- NetFavorability: `/home/anugraha/c1_WT/analysis/net_favorability_3000.csv`
+- Regression script: `/home/anugraha/c1_WT/analysis/run_full_regression_3000.py`
 - Residue mapping: `/home/anugraha/c1_WT/analysis/residue_mapping.py`
-- Scripts: `/home/anugraha/c1_WT/analysis/run_elastic_net_and_figure.py`, `/home/anugraha/c1_WT/run_contact_freq.py`
+
+### Figures
+- `/home/anugraha/antibody_optimization/figures/fig2_elastic_net_heatmap_3000.png` — NetFavorability bar + β heatmap
+- `/home/anugraha/antibody_optimization/figures/fig3_regression_diagnostics_3000.png` — R²=0.9978, RMSE=8.48, pred vs actual + residuals
+- `/home/anugraha/antibody_optimization/figures/fig4_temporal_contributions_3000.png` — 3 panels: β×ΔF(t), β×MeanFreq bar, β×ΔF(t)
+- `/home/anugraha/antibody_optimization/figures/fig5_deltaF_vs_frame.png` — raw ΔF(t) vs frame for top 10 pairs
 
 ### Residue mapping (C1 WT GRO → Global)
 - GRO order: Chain A (1-194), Chain H (195-314), Chain L (315-421)
@@ -751,57 +759,80 @@ Repeated the elastic net regression analysis directly on the C1 WT pulling simul
 - Chain H: global = GRO - 194 + 302
 - Chain L: global = GRO - 314 + 195
 
-### C1 WT regression: ranked antibody residues
+### C1 WT regression: ranked antibody residues (1500-frame, corrected energy)
 
-| Global | Chain | AA | NetFav | #Pairs | Class | Old (Wuhan) Class |
-|--------|-------|-----|--------|--------|-------|-------------------|
-| 227 | L:32 | TYR | 61.8 | 3 | HOT | HOT (119.9) |
-| 406 | H:104 | TYR | 48.4 | 4 | HOT | HOT (165.6) |
-| 405 | H:103 | TYR | 22.8 | 3 | HOT | HOT (86.0) |
-| 287 | L:92 | PHE | 22.6 | 1 | HOT | HOT (76.7) |
-| 249 | L:54 | ARG | 22.1 | 2 | HOT | HOT (74.5) |
-| **404** | **H:102** | **TYR** | **19.3** | **2** | **WARM** | **HOT (104.8)** |
-| 245 | L:50 | ASP | 8.4 | 2 | warm | lukewarm (16.2) |
-| **258** | **L:63** | **SER** | **4.3** | **1** | **UNFAVORABLE** | — |
-| 289 | L:94 | TRP | 3.5 | 1 | warm | WARM (21.1) |
-| 246 | L:51 | ALA | 2.1 | 1 | warm | WARM (23.6) |
-| 288 | L:93 | ASN | 1.6 | 1 | unfavorable | cold (0) |
-| 248 | L:53 | ASN | 1.3 | 1 | warm | cold (0) |
+NetFavorability classification: hot (>70th percentile), warm (20–70th), cold (<20th).
 
-### Top pairwise contacts (non-zero β)
+| Global | Chain | AA | NetFav | #Pairs | DominantSign | Class | Old (Wuhan) Class |
+|--------|-------|-----|--------|--------|-------------|-------|-------------------|
+| 227 | L:32 | TYR | 76.2 | 4 | favorable | **HOT** | HOT (119.9) |
+| 406 | H:104 | TYR | 73.4 | 4 | favorable | **HOT** | HOT (165.6) |
+| 405 | H:103 | TYR | 32.4 | 2 | favorable | **HOT** | HOT (86.0) |
+| **404** | **H:102** | **TYR** | **23.1** | **2** | **favorable** | **HOT** | HOT (104.8) |
+| 287 | L:92 | PHE | 21.8 | 1 | favorable | **HOT** | HOT (76.7) |
+| 249 | L:54 | ARG | 20.1 | 2 | favorable | **HOT** | HOT (74.5) |
+| **245** | **L:50** | **ASP** | **18.6** | **3** | **favorable** | **HOT** | lukewarm (16.2) |
+| 225 | L:30 | HIS | 5.2 | 1 | unfavorable | warm | cold (0) |
+| 246 | L:51 | ALA | 3.4 | 1 | favorable | warm | WARM (23.6) |
+| 247 | L:52 | SER | 3.1 | 2 | unfavorable | warm | — |
+| 248 | L:53 | ASN | 2.9 | 1 | favorable | warm | cold (0) |
+| 288 | L:93 | ASN | 2.6 | 1 | unfavorable | warm | cold (0) |
+| 401 | H:99 | GLU | 2.5 | 1 | favorable | warm | — |
+| 244 | L:49 | PHE | 2.0 | 1 | favorable | warm | DESTABILIZING (-16.3) |
+| **258** | **L:63** | **SER** | **1.9** | **1** | **unfavorable** | **warm** | — |
+| 255 | L:60 | ALA | 1.5 | 1 | unfavorable | warm | — |
+| 334 | H:32 | TYR | 1.4 | 1 | favorable | warm | — |
+| 306 | H:4 | LEU | 1.3 | 1 | unfavorable | warm | — |
+| 222 | L:27 | GLN | 1.2 | 1 | favorable | warm | — |
+| 256 | L:61 | ARG | 0.3 | 1 | unfavorable | cold | — |
+| 377 | H:75 | SER | 0.2 | 1 | favorable | cold | — |
+| 223 | L:28 | SER | 0.2 | 1 | favorable | cold | — |
+| 260 | L:65 | SER | 0.04 | 1 | unfavorable | cold | cold (0) |
+| 378 | H:76 | LYS | 0.03 | 1 | favorable | cold | — |
+
+### Top 10 pairwise contacts (non-zero β)
 
 | Antigen | Antibody | β | MeanFreq | |β×F| | Sign |
-|---------|----------|------|----------|------|------|
-| A:84 | L:Y227 | -0.49 | 116.0 | 56.8 | favorable |
-| A:160 | H:Y406 | -0.27 | 130.0 | 34.5 | favorable |
-| A:123 | L:F287 | -0.30 | 75.4 | 22.6 | favorable |
-| A:172 | L:R249 | -0.18 | 121.3 | 21.4 | favorable |
-| A:157 | H:Y404 | -0.23 | 75.0 | 17.4 | favorable |
-| A:150 | H:Y405 | -0.11 | 122.9 | 13.3 | favorable |
-| A:172 | L:D245 | -0.13 | 53.6 | 7.1 | favorable |
-| A:172 | L:S258 | +0.10 | 40.9 | 4.3 | **UNFAVORABLE** |
-| A:172 | L:A246 | -0.04 | 59.2 | 2.1 | favorable |
-| A:172 | L:N248 | -0.01 | 122.1 | 1.3 | favorable |
+|---------|----------|-------|----------|------|------|
+| A:K84 | L:Y227 | -0.415 | 143.8 | 59.6 | favorable |
+| A:Q160 | H:Y406 | -0.259 | 161.1 | 41.7 | favorable |
+| A:F157 | H:Y406 | -0.128 | 184.4 | 23.6 | favorable |
+| A:F123 | L:F287 | -0.234 | 93.4 | 21.8 | favorable |
+| A:V150 | H:Y405 | -0.164 | 123.4 | 20.2 | favorable |
+| A:Y172 | L:R249 | -0.128 | 150.3 | 19.3 | favorable |
+| A:F157 | H:Y404 | -0.197 | 92.9 | 18.3 | favorable |
+| A:Y172 | L:D245 | -0.193 | 66.4 | 12.8 | favorable |
+| A:E151 | H:Y405 | -0.053 | 232.0 | 12.2 | favorable |
+| A:Q160 | L:Y227 | -0.074 | 136.8 | 10.1 | favorable |
 
 ### Key differences from old (Wuhan/Omicron) regression
 1. **Core hot spots preserved**: Y227, Y406, Y405, F287, R249 are HOT in both systems
-2. **Y404 dropped**: HOT (104.8) → WARM (19.3). Now a potential mutation target
-3. **R374 disappeared**: HOT (74.0) → absent in new analysis
-4. **S258 is NEW and UNFAVORABLE**: contacts actively destabilize binding — mutation target
-5. **D265 absent**: SASA = 0.31 nm² (below 0.5 threshold at frame 0 of pulling), filtered out. Was WARM (24.3) in old analysis. Still our best single mutation by MM-GBSA.
-6. **S262 absent**: also filtered by SASA in C1 WT pulling frame 0. Was WARM (50.8) in old.
-7. **Absolute values lower**: all NetFavorability values ~3-4x smaller in new analysis, but relative ordering preserved
+2. **Y404 remains HOT**: Was HOT (104.8) in Wuhan, initially appeared WARM in preliminary C1 WT analysis (truncated data), but HOT (23.1) with corrected 1500-frame regression
+3. **D245 promoted to HOT**: Was lukewarm (16.2) in Wuhan → HOT (18.6) in corrected C1 WT analysis
+4. **R374 disappeared**: HOT (74.0) → absent in new analysis
+5. **S258 is NEW and unfavorable**: warm classification but unfavorable dominant sign — mutation target
+6. **D265 absent**: SASA = 0.31 nm² (below 0.5 threshold at frame 0 of pulling), filtered out. Was WARM (24.3) in old analysis. Still our best single mutation by MM-GBSA.
+7. **S262 absent**: also filtered by SASA in C1 WT pulling frame 0. Was WARM (50.8) in old.
+8. **Several new warm unfavorable residues**: H225, S247, N288, A255, L306 — all have unfavorable dominant contacts
 
 ### New mutation targets from C1 WT regression
 
-Based on the new analysis, the following are novel actionable targets:
+**Important**: With corrected energy data and 1500-frame regression, Y404 and D245 are now classified as **HOT** (not warm/lukewarm). Per our strategy, hot spots should NOT be mutated. Y404W/H and D245N jobs are running as **negative controls** (expected to weaken binding).
 
-| Mutation | Target | Rationale |
-|----------|--------|-----------|
-| Y404W | H:102 | Dropped from HOT→WARM; Tyr→Trp extends aromatic contacts |
-| Y404H | H:102 | Alternative: add imidazole for H-bonding |
-| S258A | L:63 | UNFAVORABLE contacts; shrink side chain to remove destabilization |
-| S258G | L:63 | More aggressive removal of unfavorable contacts |
-| D245N | L:50 | Warm/favorable; charge removal like D265N success |
+| Mutation | Target | Rationale | Expected outcome |
+|----------|--------|-----------|-----------------|
+| S258A | L:63 | Unfavorable contacts; shrink side chain to remove destabilization | **Improvement** (proper warm/unfavorable target) |
+| S258G | L:63 | More aggressive removal of unfavorable contacts | **Improvement** (proper warm/unfavorable target) |
+| Y404W | H:102 | HOT spot — submitted before regression correction | **Negative control** (expect weakened binding) |
+| Y404H | H:102 | HOT spot — submitted before regression correction | **Negative control** (expect weakened binding) |
+| D245N | L:50 | HOT spot — submitted before regression correction | **Negative control** (expect weakened binding) |
 
-These are in addition to the previously identified targets. D265N remains the top performer by MM-GBSA despite being absent from the new regression (buried at pulling frame 0).
+Only S258A and S258G are properly justified warm/unfavorable mutation targets. D265N remains the top performer by MM-GBSA despite being absent from this regression (buried at pulling frame 0).
+
+### Future mutation candidates (warm/unfavorable residues)
+These residues have unfavorable dominant contacts and are in the warm classification — proper targets for mutation:
+- **H225** (L:30, NF=5.2, unfavorable): destabilizing contact; try H225A or H225N
+- **S247** (L:52, NF=3.1, unfavorable): try S247A or S247G
+- **N288** (L:93, NF=2.6, unfavorable): adjacent to F287; try N288A
+- **A255** (L:60, NF=1.5, unfavorable): try A255G
+- **L306** (H:4, NF=1.3, unfavorable): try L306A
