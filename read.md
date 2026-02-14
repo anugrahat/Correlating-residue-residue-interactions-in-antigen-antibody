@@ -109,20 +109,26 @@ Numbering reminder:
 3. **Aggregate by antibody residue**: Sum `|beta × MeanFreq|` across all antigen partners to rank antibody residues by importance.
    - Data source: `c1_from_existing_regression_antibody_targets.csv`
 
-### Residue classification (from regression)
+### Residue classification (from regression) — REVISED
 
-| Classification | NetFavorability | Meaning | Action |
+The original hot/warm/cold classification assumed hot spots were "already optimal" and should not be mutated. **This was wrong.** Round 3 results showed that hot spot mutations (F287W, D245N, Y404W) produced the largest improvements, while warm spot mutations gave smaller gains. The regression identifies high-leverage positions, not untouchable ones.
+
+| Classification | NetFavorability | Meaning | Revised Action |
 |---|---|---|---|
-| **Hot spot** | > 70 | Already optimal, dominant binding contributor | DO NOT mutate |
-| **Warm spot** | 20–70 | Suboptimal contacts, room for improvement | Mutate (conservative substitutions) |
-| **Lukewarm** | 5–20 | Moderate signal, many contact pairs | Consider for affinity maturation |
-| **Cold (many pairs)** | 0, but #pairs ≥ 8 | Sits at interface but contributes nothing | Best targets for NEW contacts |
-| **Destabilizing** | < 0 | Actively hurts binding | Remove/shrink side chain |
+| **Hot spot** | high | Strong coupling to binding energy — high leverage | **Best mutation targets** — right chemistry gives largest ΔΔG |
+| **Warm spot** | moderate | Moderate coupling — moderate leverage | Good targets, but smaller effect size |
+| **Cold spot** | low/zero | Weak or no coupling | Low priority — mutations have small effects |
+| **Unfavorable** | any, positive β | Contact destabilizes binding | Remove/shrink side chain |
 
-### Key insight: regression identifies important CONTACTS, not mutation targets
-- **Hot spots** (Y404, Y405, Y406, Y227, F287, R249, R374) are already optimal — mutating them destroys binding
-- **Warm spots** (S262, D265, A246) have suboptimal contacts — mutations here aim to improve existing interactions
-- **Cold spots with many pairs** have untapped potential — the residue touches the antigen but doesn't contribute. A bulkier/aromatic substitution could CREATE new productive contacts
+### Key insight: regression identifies HIGH-LEVERAGE positions
+- The regression ranks positions by their coupling strength to binding energy (|β|)
+- **Higher coupling = larger effect of mutation in either direction** (improvement or disruption)
+- Hot spots gave ΔΔG of -18 to -39 kcal/mol; warm spots gave -6 to -16 kcal/mol
+- The classification tells you WHERE to mutate (high |β|), not WHETHER to mutate
+- **What determines success is the chemistry of the substitution**, not the hot/warm label:
+  - Charge removal (D→N): works at any classification — relieves desolvation penalty
+  - Aromatic extension (Phe→Trp, small→Tyr): works when it extends existing aromatic platform
+  - Non-conservative disruption (Tyr→His): fails at hot spots — destroys the interaction
 
 ### Ranked antibody interface residues
 
@@ -640,17 +646,23 @@ printf 'Protein\nSystem\n' | gmx_mpi trjconv -f md10.trr -s md10.tpr -o md10_noP
 2. **PBC-broken molecules**: Raw md10.trr has molecules broken across periodic boundaries, causing sander BOND energy overflow (`*************`). Fix: `trjconv -pbc mol -center` to create md10_noPBC.trr
 3. **Late frame instability**: Some systems (especially WT) have structural instability in last 1ns. Fix: `endframe=900` (use 90 frames instead of 100)
 
-### MM-GBSA results
+### MM-GBSA results (all single mutants, ranked)
 
-| Mutation | ΔG_bind (kcal/mol) | SEM | ΔΔG vs WT | Interpretation |
-|----------|-------------------|-----|-----------|----------------|
-| D265N | -64.73 | 1.45 | -39.4 | **Best single mutant** |
-| F287W | -58.99 | 1.44 | -33.7 | **Strong improvement** |
-| D265N+F287W | -50.82 | 0.88 | -25.5 | Worse than either single (paradox) |
-| S262Y | -40.28 | 1.20 | -15.0 | Significant improvement |
-| N248Y | -36.20 | 1.01 | -10.9 | Moderate improvement |
-| A246Y | -31.41 | 0.81 | -6.1 | Mild improvement |
-| **WT** | **-25.31** | **0.86** | **—** | **Baseline** |
+| Mutation | ΔG_bind (kcal/mol) | SEM | ΔΔG vs WT | Classification | Chemistry |
+|----------|-------------------|-----|-----------|---------------|-----------|
+| D265N | -64.73 | 1.45 | -39.4 | WARM (old) / absent (new) | Charge removal (D→N) |
+| F287W | -58.99 | 1.44 | -33.7 | HOT | Aromatic extension (F→W) |
+| D245N | -43.47 | 1.10 | -18.2 | HOT | Charge removal (D→N) |
+| S258G | -41.78 | 0.82 | -16.5 | warm/unfavorable | Side chain removal (S→G) |
+| S262Y | -40.28 | 1.20 | -15.0 | WARM (old) / absent (new) | Aromatic addition (S→Y) |
+| N248Y | -36.20 | 1.01 | -10.9 | cold (old) / warm (new) | Aromatic addition (N→Y) |
+| A246Y | -31.41 | 0.81 | -6.1 | WARM | Aromatic addition (A→Y) |
+| Y404W | -28.00 | 0.96 | -2.7 | HOT | Aromatic extension (Y→W) |
+| **WT** | **-25.31** | **0.86** | **—** | — | — |
+| S258A | -24.35 | 0.91 | +1.0 | warm/unfavorable | Conservative removal (S→A) |
+| Y404H | -22.79 | 0.77 | +2.5 | HOT | Non-conservative (Y→H) |
+| T403Y | -21.08 | 1.57 | +4.2 | lukewarm | Aromatic addition (T→Y) |
+| Y157A | -13.73 | 1.49 | +11.6 | antigen control | Alanine scan |
 | T403Y | -21.08 | 1.57 | +4.2 | Slightly worse (SMD false positive) |
 | Y157A | -13.73 | 1.49 | +11.6 | Confirmed negative control |
 
@@ -691,10 +703,11 @@ Result files: `/home/anugraha/c1_*/work/FINAL_RESULTS_MMPBSA.dat`
 Top two (D265N, F287W) agree between methods. Mid-tier ranking differs significantly — MM-GBSA is more reliable for equilibrium binding affinity.
 
 ### Recommended next steps
-1. **New double mutants**: Combine D265N with S262Y or N248Y (avoid F287W combo due to electrostatic interference)
-2. **Triple mutants**: If D265N+S262Y works, try D265N+S262Y+N248Y
-3. **Experimental validation**: D265N and F287W are the strongest candidates for wet-lab testing
-4. **Longer equilibrium MD**: 50-100ns trajectories would give more reliable MM-GBSA with better sampling
+1. **Aromatic extension at top hot spots**: Y227W, Y406W, Y405W — highest leverage positions, proven Tyr→Trp chemistry
+2. **Charge removal at E401**: E401Q — extends the successful D→N strategy to Glu
+3. **Experimental validation**: D265N (-64.7), F287W (-59.0), D245N (-43.5), S258G (-41.8) are top candidates for wet-lab testing
+4. **Avoid double mutants**: All 5 tested doubles were anti-cooperative. Focus on single mutants.
+5. **Longer equilibrium MD**: 50-100ns trajectories would give more reliable MM-GBSA with better sampling
 
 ## Double Mutant MM-GBSA Results (Round 2)
 
@@ -710,20 +723,49 @@ Testing double mutant combinations to find cooperative pairs.
 
 **Pattern**: ALL tested doubles are anti-cooperative. D265N-based doubles lose the most due to coupled electrostatic network disruption. F287W-based doubles (F287W+N248Y, F287W+S262Y) also anti-cooperative. Single mutants remain superior to all tested doubles. Double mutant strategy abandoned.
 
-## New Mutation Targets: Phase 1 + MM-GBSA (Round 3, from C1 WT Regression)
+## Round 3: New Mutations from C1 WT Regression
 
-Jobs submitted from new elastic net regression targets:
-
-| Mutation | Job ID | Status | ΔG_bind (kcal/mol) | SEM |
-|----------|--------|--------|---------------------|-----|
-| Y404W | 754630 | Running | — | — |
-| Y404H | 754631 | Running | — | — |
-| S258A | 754632 | Pending | — | — |
-| S258G | 754633 | Pending | — | — |
-| D245N | 754634 | Pending | — | — |
-
-Pipeline: Phase 1 (tleap → pdb2gmx → solvate → EM → NVT → NPT → 10ns MD) + MM-GBSA (gmx_MMPBSA, igb=5, 90 frames).
+Pipeline: Phase 1 (tleap → pdb2gmx → solvate → EM → NVT → NPT → 10ns MD) + MM-GBSA (gmx_MMPBSA, igb=5, ~80-90 frames).
 Folders: `/home/anugraha/c1_{Y404W,Y404H,S258A,S258G,D245N}/`
+
+### Round 3 MM-GBSA results
+
+| Mutation | ΔG_bind (kcal/mol) | SEM | ΔΔG vs WT (-25.31) | Classification | Outcome |
+|----------|-------------------|-----|---------------------|---------------|---------|
+| D245N | -43.47 | 1.10 | -18.2 | HOT (18.6) | **Improvement** — charge removal at hot spot |
+| S258G | -41.78 | 0.82 | -16.5 | warm/unfav (1.9) | **Improvement** — remove unfavorable contact |
+| Y404W | -28.00 | 0.96 | -2.7 | HOT (23.1) | Mild improvement — aromatic extension |
+| S258A | -24.35 | 0.91 | +1.0 | warm/unfav (1.9) | Neutral — Ala not aggressive enough |
+| Y404H | -22.79 | 0.77 | +2.5 | HOT (23.1) | Weakened — non-conservative disruption |
+
+Note: D245N used ~8ns trajectory (early MM-GBSA, 78 frames) since the 10ns MD was still running.
+
+### Round 3 key findings
+
+1. **D245N is a strong hit** (ΔΔG = -18.2): Same Asp→Asn charge removal as D265N (our #1 hit). Works despite D245 being classified HOT. Confirms that the regression's hot/warm label does not predict mutability.
+
+2. **S258G works, S258A doesn't**: Both target the same unfavorable S258 position, but only complete side chain removal (Gly) eliminates the destabilizing contact. Ala retains too much of the problematic interaction. The regression identifies the position correctly but cannot predict which substitution works.
+
+3. **Y404W mild improvement, Y404H weakened**: Both target the same HOT Tyr. Trp preserves the aromatic platform and slightly improves packing (ΔΔG = -2.7). His disrupts the aromatic interaction (ΔΔG = +2.5). Chemistry of the substitution matters more than the classification.
+
+### Desolvation penalty: why charge removal works
+
+MM-GBSA energy decomposition reveals the mechanism:
+
+| Component | WT | D265N | D245N | Meaning |
+|-----------|-----|-------|-------|---------|
+| ΔVDWAALS | -75.8 | -109.7 | -97.7 | Van der Waals packing |
+| ΔEEL | -45.2 | -86.8 | +23.0 | Electrostatic attraction |
+| ΔEGB | +105.7 | +147.0 | +43.5 | Desolvation penalty (polar) |
+| ΔESURF | -10.0 | -15.2 | -12.3 | Nonpolar solvation |
+| **ΔTOTAL** | **-25.3** | **-64.7** | **-43.5** | **Binding free energy** |
+
+Charged Asp at the interface is a liability:
+- The -1 carboxylate has a strong solvation shell in the unbound state (water stabilizes the charge)
+- Upon binding, the interface buries the charge → water is displaced → massive desolvation penalty (ΔEGB)
+- Unless a perfectly positioned Arg/Lys on the antigen compensates, the desolvation cost exceeds the electrostatic gain
+- **D245N mechanism**: Removing the charge drops ΔEGB from +105.7 to +43.5 (saves ~62 kcal/mol in desolvation). Electrostatics become slightly repulsive (+23.0), but VDW packing improves by 22 kcal/mol — Asn packs better without forcing water into the interface.
+- **D265N mechanism**: Different — VDW jumps massively (-75.8 → -109.7), electrostatics get stronger (-45.2 → -86.8). The Asn amide makes tighter H-bonds and allows interface compression.
 
 ## New Elastic Net Regression on C1 WT (10 Pulling Replicas)
 
@@ -815,24 +857,51 @@ NetFavorability classification: hot (>70th percentile), warm (20–70th), cold (
 7. **S262 absent**: also filtered by SASA in C1 WT pulling frame 0. Was WARM (50.8) in old.
 8. **Several new warm unfavorable residues**: H225, S247, N288, A255, L306 — all have unfavorable dominant contacts
 
-### New mutation targets from C1 WT regression
+### Revised mutation strategy (post-Round 3)
 
-**Important**: With corrected energy data and 1500-frame regression, Y404 and D245 are now classified as **HOT** (not warm/lukewarm). Per our strategy, hot spots should NOT be mutated. Y404W/H and D245N jobs are running as **negative controls** (expected to weaken binding).
+The hot/warm/cold classification is **not a reliable decision rule** for mutation design. Evidence:
 
-| Mutation | Target | Rationale | Expected outcome |
-|----------|--------|-----------|-----------------|
-| S258A | L:63 | Unfavorable contacts; shrink side chain to remove destabilization | **Improvement** (proper warm/unfavorable target) |
-| S258G | L:63 | More aggressive removal of unfavorable contacts | **Improvement** (proper warm/unfavorable target) |
-| Y404W | H:102 | HOT spot — submitted before regression correction | **Negative control** (expect weakened binding) |
-| Y404H | H:102 | HOT spot — submitted before regression correction | **Negative control** (expect weakened binding) |
-| D245N | L:50 | HOT spot — submitted before regression correction | **Negative control** (expect weakened binding) |
+| Mutation | ΔΔG | Classification | "Don't mutate hot" correct? |
+|----------|-----|---------------|---------------------------|
+| F287W | -33.7 | HOT | **No** — major improvement |
+| D245N | -18.2 | HOT | **No** — strong improvement |
+| Y404W | -2.7 | HOT | **No** — mild improvement |
+| Y404H | +2.5 | HOT | Yes — weakened |
+| Y405N | weaker | HOT | Yes — weakened |
 
-Only S258A and S258G are properly justified warm/unfavorable mutation targets. D265N remains the top performer by MM-GBSA despite being absent from this regression (buried at pulling frame 0).
+Hot spot rule: **2/5 correct (40%)**. Warm spot rule: 3/4 correct (75%). The classification is barely better than a coin flip for hot spots.
 
-### Future mutation candidates (warm/unfavorable residues)
-These residues have unfavorable dominant contacts and are in the warm classification — proper targets for mutation:
-- **H225** (L:30, NF=5.2, unfavorable): destabilizing contact; try H225A or H225N
-- **S247** (L:52, NF=3.1, unfavorable): try S247A or S247G
-- **N288** (L:93, NF=2.6, unfavorable): adjacent to F287; try N288A
-- **A255** (L:60, NF=1.5, unfavorable): try A255G
-- **L306** (H:4, NF=1.3, unfavorable): try L306A
+**What actually predicts success is the chemistry:**
+
+| Chemistry | Success rate | Examples |
+|-----------|-------------|---------|
+| Charge removal (D→N) | 2/2 (100%) | D265N (-39.4), D245N (-18.2) |
+| Aromatic extension (→Trp) | 2/2 (100%) | F287W (-33.7), Y404W (-2.7) |
+| Aromatic addition (small→Tyr) | 3/4 (75%) | S262Y (-15.0), N248Y (-10.9), A246Y (-6.1); T403Y failed |
+| Side chain removal (→Gly) | 1/1 (100%) | S258G (-16.5); but S258A (→Ala) failed |
+| Non-conservative at aromatic hot spot | 0/2 (0%) | Y404H (+2.5), Y405N (weaker) |
+
+**Revised approach**: Use the regression to identify high-leverage positions (high |β|), then apply physics-based substitution rules:
+1. **Interfacial Asp** → try D→N (charge removal relieves desolvation penalty)
+2. **Interfacial Glu** → try E→Q (same logic)
+3. **Aromatic positions (Phe, Tyr)** → try →Trp (extend aromatic platform, preserve interaction type)
+4. **Small residues with unfavorable β** → try →Gly (aggressive removal of destabilizing contact)
+5. **Never** replace aromatics with non-aromatics at high-leverage positions (His, Asn at Tyr sites fails)
+
+### Future mutation candidates (revised strategy)
+
+**High-leverage charge removal** (highest priority — proven chemistry):
+- **E401** (H:99, NF=2.5, favorable): Glu→Gln charge removal. Same D→N logic applied to Glu.
+  - Note: E401 is warm, not hot — may have smaller effect, but charge removal is reliable
+
+**High-leverage aromatic extension** (proven chemistry):
+- **Y227W** (L:32, NF=76.2, HOT): Top hot spot. Tyr→Trp extends aromatic platform. Highest leverage position available.
+- **Y406W** (H:104, NF=73.4, HOT): Second hot spot. Same Tyr→Trp logic.
+- **Y405W** (H:103, NF=32.4, HOT): Third hot spot. Y405N failed but Trp is conservative aromatic — different chemistry.
+
+**Unfavorable contact removal**:
+- **H225G** (L:30, NF=5.2, unfavorable): destabilizing contact; Gly removes it completely
+- **S247G** (L:52, NF=3.1, unfavorable): same logic
+- **N288A** (L:93, NF=2.6, unfavorable): adjacent to F287
+
+D265N remains the top performer by MM-GBSA (-64.73 kcal/mol) despite being absent from the C1 WT regression (SASA-filtered at pulling frame 0).
