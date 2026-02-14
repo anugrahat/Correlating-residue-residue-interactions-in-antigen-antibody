@@ -774,15 +774,57 @@ Two approaches from the corrected regression:
 1. **Aromatic extension at top hot spots** (Tyr→Trp, proven chemistry)
 2. **Removal of unfavorable contacts** (→Gly, proven by S258G)
 
-### Mutations submitted
+### Round 4 MM-GBSA results
 
-| Mutation | Global | NF | Class | Chemistry | Rationale |
-|----------|--------|-----|-------|-----------|-----------|
-| Y406W | H:104 | 80.6 | HOT | Aromatic extension | #1 hot spot, Tyr→Trp |
-| Y227W | L:32 | 67.0 | HOT | Aromatic extension | #2 hot spot, Tyr→Trp |
-| L306G | H:4 | 5.8 | warm/unfav | Side chain removal | Largest unfavorable signal |
-| T330G | H:28 | 3.7 | warm/unfav | Side chain removal | Unfavorable contact removal |
-| S247G | L:52 | 3.4 | warm/unfav | Side chain removal | Same strategy as S258G (-16.5) |
+| Mutation | NF | Class | Chemistry | ΔG (kcal/mol) | SEM | ΔΔG vs WT | Outcome |
+|----------|-----|-------|-----------|--------------|-----|-----------|---------|
+| S247G | 3.4 | warm/unfav | Side chain removal | -56.87 | 1.20 | -31.6 | **Major hit** — 3rd best overall |
+| T330G | 3.7 | warm/unfav | Side chain removal | -41.47 | 0.65 | -16.2 | **Strong hit** |
+| Y227W | 67.0 | HOT | Aromatic extension | -35.99 | 0.58 | -10.7 | **Hit** — #2 hot spot Tyr→Trp |
+| L306G | 5.8 | warm/unfav | Side chain removal | -16.35 | 0.60 | +9.0 | **Worse** — disrupted N-terminal packing |
+| Y406W | 80.6 | HOT | Aromatic extension | — | — | — | Running (pipeline resubmitted) |
+
+### Round 4 key findings
+
+1. **S247G is a major hit** (ΔΔG = -31.6): Third-best single mutant overall, behind D265N (-39.4) and F287W (-33.7). Removing the unfavorable Ser→Gly at L:52 eliminates a destabilizing contact identified by the regression. Validates the unfavorable contact removal strategy.
+
+2. **T330G works** (ΔΔG = -16.2): Comparable to S258G (-16.5) and D245N (-18.2). Removing Thr at H:28, an unfavorable contact not detected in the old contaminated regression, only found after the off-by-one fix.
+
+3. **Y227W is a solid hit** (ΔΔG = -10.7): Aromatic extension at the #2 hot spot works but with moderate effect. Smaller gain than F287W (-33.7) despite higher NF (67.0 vs 17.7) — NF magnitude does not linearly predict ΔΔG.
+
+4. **L306G failed** (ΔΔG = +9.0): Despite unfavorable regression signal (NF=5.8), removing Leu at H:4 (N-terminal heavy chain) weakened binding. Likely disrupted hydrophobic core packing — Leu→Gly at a buried position creates a cavity rather than removing a bad contact. Lesson: →Gly works at surface positions but can backfire at partially buried sites.
+
+### Updated chemistry success rates (all rounds)
+
+| Chemistry | Success rate | Hits | Failures |
+|-----------|-------------|------|----------|
+| Charge removal (D→N) | 2/2 (100%) | D265N (-39.4), D245N (-18.2) | — |
+| Unfavorable →Gly | 3/4 (75%) | S247G (-31.6), S258G (-16.5), T330G (-16.2) | L306G (+9.0) |
+| Aromatic extension (→Trp) | 3/3 (100%) | F287W (-33.7), Y227W (-10.7), Y404W (-2.7) | — |
+| Aromatic addition (small→Tyr) | 3/4 (75%) | S262Y (-15.0), N248Y (-10.9), A246Y (-6.1) | T403Y (+4.2) |
+| Non-conservative at aromatic | 0/2 (0%) | — | Y404H (+2.5), Y405N (weaker) |
+
+### Updated complete MM-GBSA ranking (all single mutants)
+
+| Rank | Mutation | ΔG (kcal/mol) | SEM | ΔΔG vs WT | Chemistry |
+|------|----------|--------------|-----|-----------|-----------|
+| 1 | D265N | -64.73 | 1.45 | -39.4 | Charge removal |
+| 2 | F287W | -58.99 | 1.44 | -33.7 | Aromatic extension |
+| 3 | **S247G** | **-56.87** | **1.20** | **-31.6** | **Unfavorable removal** |
+| 4 | D245N | -43.47 | 1.10 | -18.2 | Charge removal |
+| 5 | S258G | -41.78 | 0.82 | -16.5 | Unfavorable removal |
+| 6 | **T330G** | **-41.47** | **0.65** | **-16.2** | **Unfavorable removal** |
+| 7 | S262Y | -40.28 | 1.20 | -15.0 | Aromatic addition |
+| 8 | N248Y | -36.20 | 1.01 | -10.9 | Aromatic addition |
+| 9 | **Y227W** | **-35.99** | **0.58** | **-10.7** | **Aromatic extension** |
+| 10 | A246Y | -31.41 | 0.81 | -6.1 | Aromatic addition |
+| 11 | Y404W | -28.00 | 0.96 | -2.7 | Aromatic extension |
+| 12 | **WT** | **-25.31** | **0.86** | **—** | — |
+| 13 | S258A | -24.35 | 0.91 | +1.0 | Conservative removal |
+| 14 | Y404H | -22.79 | 0.77 | +2.5 | Non-conservative |
+| 15 | T403Y | -21.08 | 1.57 | +4.2 | Aromatic addition |
+| 16 | **L306G** | **-16.35** | **0.60** | **+9.0** | **Unfavorable removal** |
+| 17 | Y157A | -13.73 | 1.49 | +11.6 | Alanine scan (control) |
 
 Folders: `/home/anugraha/c1_{Y406W,Y227W,L306G,T330G,S247G}/`
 
@@ -905,36 +947,35 @@ Hot spot rule: **2/5 correct (40%)**. Warm spot rule: 3/4 correct (75%). The cla
 | Chemistry | Success rate | Examples |
 |-----------|-------------|---------|
 | Charge removal (D→N) | 2/2 (100%) | D265N (-39.4), D245N (-18.2) |
-| Aromatic extension (→Trp) | 2/2 (100%) | F287W (-33.7), Y404W (-2.7) |
+| Aromatic extension (→Trp) | 3/3 (100%) | F287W (-33.7), Y227W (-10.7), Y404W (-2.7) |
+| Unfavorable →Gly | 3/4 (75%) | S247G (-31.6), S258G (-16.5), T330G (-16.2); L306G failed (+9.0) |
 | Aromatic addition (small→Tyr) | 3/4 (75%) | S262Y (-15.0), N248Y (-10.9), A246Y (-6.1); T403Y failed |
-| Side chain removal (→Gly) | 1/1 (100%) | S258G (-16.5); but S258A (→Ala) failed |
 | Non-conservative at aromatic hot spot | 0/2 (0%) | Y404H (+2.5), Y405N (weaker) |
 
 **Revised approach**: Use the regression to identify high-leverage positions (high |β|), then apply physics-based substitution rules:
 1. **Interfacial Asp** → try D→N (charge removal relieves desolvation penalty)
 2. **Interfacial Glu** → try E→Q (same logic)
 3. **Aromatic positions (Phe, Tyr)** → try →Trp (extend aromatic platform, preserve interaction type)
-4. **Small residues with unfavorable β** → try →Gly (aggressive removal of destabilizing contact)
+4. **Unfavorable β at surface positions** → try →Gly (remove destabilizing contact). Caution: fails at partially buried sites (L306G)
 5. **Never** replace aromatics with non-aromatics at high-leverage positions (His, Asn at Tyr sites fails)
 
-### Future mutation candidates (revised strategy)
+### Future mutation candidates
 
-**High-leverage aromatic extension** (proven chemistry, submitted):
-- **Y406W** (H:104, NF=80.6, HOT): #1 hot spot. Tyr→Trp extends aromatic platform. **Submitted** (job 754685).
-- **Y227W** (L:32, NF=67.0, HOT): #2 hot spot. Same Tyr→Trp logic. **Submitted** (job 754684).
+**Awaiting results**:
+- **Y406W** (H:104, NF=80.6, HOT): #1 hot spot. Tyr→Trp. Pipeline running.
+
+**High-leverage aromatic extension** (next priority):
 - **Y405W** (H:103, NF=34.3, HOT): #3 hot spot. Y405N failed but Trp is conservative aromatic — different chemistry.
 
-**Unfavorable contact removal** (submitted):
-- **L306G** (H:4, NF=5.8, unfavorable): Largest unfavorable signal. Leu→Gly removes destabilizing contact. **Submitted** (job 754686).
-- **T330G** (H:28, NF=3.7, unfavorable): Same →Gly strategy. **Submitted** (job 754687).
-- **S247G** (L:52, NF=3.4, unfavorable): Same logic as S258G (-16.5). **Submitted** (job 754688).
-
-**High-leverage charge removal** (next priority):
+**Charge removal** (proven 100% success rate):
 - **E401Q** (H:99, NF=3.5, favorable): Glu→Gln charge removal. Same D→N logic applied to Glu.
 
-**Remaining untested**:
-- **R249** (L:54, NF=16.2, HOT): Arg — could try R249K (conservative) or R249W (aromatic)
-- **H225G** (L:30, NF=1.9, unfavorable): destabilizing contact; Gly removes it
+**Remaining untested unfavorable contacts**:
+- **H225G** (L:30, NF=1.9, unfavorable): destabilizing contact; surface position, Gly should work
 - **N288A** (L:93, NF=2.8, unfavorable): adjacent to F287; remove destabilizing contact
+- **A255G** (L:60, NF=1.6, unfavorable): small unfavorable contact
+
+**Other untested**:
+- **R249** (L:54, NF=16.2, HOT): Arg — could try R249K (conservative) or R249W (aromatic)
 
 D265N remains the top performer by MM-GBSA (-64.73 kcal/mol) despite being absent from the C1 WT regression (SASA-filtered at pulling frame 0).
