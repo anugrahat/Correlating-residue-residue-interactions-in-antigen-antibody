@@ -648,23 +648,21 @@ printf 'Protein\nSystem\n' | gmx_mpi trjconv -f md10.trr -s md10.tpr -o md10_noP
 
 ### MM-GBSA results (all single mutants, ranked)
 
-| Mutation | ΔG_bind (kcal/mol) | SEM | ΔΔG vs WT | Classification | Chemistry |
-|----------|-------------------|-----|-----------|---------------|-----------|
-| D265N | -64.73 | 1.45 | -39.4 | WARM (old) / absent (new) | Charge removal (D→N) |
-| F287W | -58.99 | 1.44 | -33.7 | HOT | Aromatic extension (F→W) |
-| D245N | -43.47 | 1.10 | -18.2 | HOT | Charge removal (D→N) |
-| S258G | -41.78 | 0.82 | -16.5 | warm/unfavorable | Side chain removal (S→G) |
-| S262Y | -40.28 | 1.20 | -15.0 | WARM (old) / absent (new) | Aromatic addition (S→Y) |
-| N248Y | -36.20 | 1.01 | -10.9 | cold (old) / warm (new) | Aromatic addition (N→Y) |
-| A246Y | -31.41 | 0.81 | -6.1 | WARM | Aromatic addition (A→Y) |
-| Y404W | -28.00 | 0.96 | -2.7 | HOT | Aromatic extension (Y→W) |
+| Mutation | ΔG_bind (kcal/mol) | SEM | ΔΔG vs WT | Corrected NF | Chemistry |
+|----------|-------------------|-----|-----------|-------------|-----------|
+| D265N | -64.73 | 1.45 | -39.4 | absent (SASA-filtered) | Charge removal (D→N) |
+| F287W | -58.99 | 1.44 | -33.7 | 17.7 (HOT) | Aromatic extension (F→W) |
+| D245N | -43.47 | 1.10 | -18.2 | 23.2 (HOT) | Charge removal (D→N) |
+| S258G | -41.78 | 0.82 | -16.5 | absent | Side chain removal (S→G) |
+| S262Y | -40.28 | 1.20 | -15.0 | 1.9 (warm) | Aromatic addition (S→Y) |
+| N248Y | -36.20 | 1.01 | -10.9 | 6.2 (warm) | Aromatic addition (N→Y) |
+| A246Y | -31.41 | 0.81 | -6.1 | 7.8 (HOT) | Aromatic addition (A→Y) |
+| Y404W | -28.00 | 0.96 | -2.7 | 23.4 (HOT) | Aromatic extension (Y→W) |
 | **WT** | **-25.31** | **0.86** | **—** | — | — |
-| S258A | -24.35 | 0.91 | +1.0 | warm/unfavorable | Conservative removal (S→A) |
-| Y404H | -22.79 | 0.77 | +2.5 | HOT | Non-conservative (Y→H) |
-| T403Y | -21.08 | 1.57 | +4.2 | lukewarm | Aromatic addition (T→Y) |
+| S258A | -24.35 | 0.91 | +1.0 | absent | Conservative removal (S→A) |
+| Y404H | -22.79 | 0.77 | +2.5 | 23.4 (HOT) | Non-conservative (Y→H) |
+| T403Y | -21.08 | 1.57 | +4.2 | absent | Aromatic addition (T→Y) |
 | Y157A | -13.73 | 1.49 | +11.6 | antigen control | Alanine scan |
-| T403Y | -21.08 | 1.57 | +4.2 | Slightly worse (SMD false positive) |
-| Y157A | -13.73 | 1.49 | +11.6 | Confirmed negative control |
 
 Result files: `/home/anugraha/c1_*/work/FINAL_RESULTS_MMPBSA.dat`
 
@@ -767,19 +765,40 @@ Charged Asp at the interface is a liability:
 - **D245N mechanism**: Removing the charge drops ΔEGB from +105.7 to +43.5 (saves ~62 kcal/mol in desolvation). Electrostatics become slightly repulsive (+23.0), but VDW packing improves by 22 kcal/mol — Asn packs better without forcing water into the interface.
 - **D265N mechanism**: Different — VDW jumps massively (-75.8 → -109.7), electrostatics get stronger (-45.2 → -86.8). The Asn amide makes tighter H-bonds and allows interface compression.
 
+## Round 4: Corrected Regression Targets (submitted)
+
+After fixing the off-by-one bug in contact frequency extraction and re-running the regression, we submitted mutations targeting the corrected top residues.
+
+### Strategy
+Two approaches from the corrected regression:
+1. **Aromatic extension at top hot spots** (Tyr→Trp, proven chemistry)
+2. **Removal of unfavorable contacts** (→Gly, proven by S258G)
+
+### Mutations submitted
+
+| Mutation | Global | NF | Class | Chemistry | Rationale |
+|----------|--------|-----|-------|-----------|-----------|
+| Y406W | H:104 | 80.6 | HOT | Aromatic extension | #1 hot spot, Tyr→Trp |
+| Y227W | L:32 | 67.0 | HOT | Aromatic extension | #2 hot spot, Tyr→Trp |
+| L306G | H:4 | 5.8 | warm/unfav | Side chain removal | Largest unfavorable signal |
+| T330G | H:28 | 3.7 | warm/unfav | Side chain removal | Unfavorable contact removal |
+| S247G | L:52 | 3.4 | warm/unfav | Side chain removal | Same strategy as S258G (-16.5) |
+
+Folders: `/home/anugraha/c1_{Y406W,Y227W,L306G,T330G,S247G}/`
+
 ## New Elastic Net Regression on C1 WT (10 Pulling Replicas)
 
 ### Methodology
 Repeated the elastic net regression analysis directly on the C1 WT pulling simulations (10 replicas) instead of the previous Wuhan/Omicron system (4 replicas). This provides a system-specific regression for the actual antibody-antigen pair being optimized.
 
-**Note**: Initial analysis used truncated energy data (1860/5001 frames due to incomplete XVG extraction). Re-extracted all 10 replicas from EDR files and re-averaged to get full 5001-frame energy data. Regression below uses frames 1–1500 (focused on rupture event window).
+**Note**: Initial analysis had two issues: (1) truncated energy data (1860/5001 frames due to incomplete XVG extraction) — re-extracted all 10 replicas from EDR files; (2) **off-by-one bug in contact frequency extraction** — mdtraj `resid` is 0-based but the script used 1-based GRO numbers, causing `resid 1 to 194` to select resSeq 2-195 (missed antigen GRO res 1, included antibody GRO res 195). This contaminated 36/548 pairs with antibody-antibody intra-contacts. Fixed by using `resid 0 to 193` (antigen) and `resid 194 to 420` (antibody). All 10 replicas re-extracted and regression re-run.
 
 - **Data**: 10 pulling replicas, 5001 frames each (full energy data)
 - **Frame range**: 1–1500 (rupture event focus; cleaner signal than full 5001)
-- **Contact frequency**: SASA-filtered (0.5 nm², Shrake-Rupley on frame 0), atom-atom distance < 10 Å, count-based
+- **Contact frequency**: SASA-filtered (0.5 nm², Shrake-Rupley on frame 0), atom-atom distance < 10 Å, count-based. **Fixed indexing**: mdtraj resid 0-193 = antigen (GRO 1-194), resid 194-420 = antibody (GRO 195-421)
 - **Interaction energy**: Coul-SR + LJ-SR between chauA (antigen) and rest (antibody) from energy reruns with group decomposition
-- **Regression**: ElasticNetCV (alpha=12.92, l1_ratio=0.90, R²=0.9978, RMSE=8.48)
-- **Features**: 548 residue pairs → 36 non-zero coefficients
+- **Regression**: ElasticNetCV (alpha=12.92, l1_ratio=0.50, R²=0.9981)
+- **Features**: 549 residue pairs → 52 non-zero coefficients
 
 ### Data locations
 - Contact frequencies: `/home/anugraha/c1_WT/analysis/average_frequency.csv`
@@ -791,7 +810,7 @@ Repeated the elastic net regression analysis directly on the C1 WT pulling simul
 
 ### Figures
 - `/home/anugraha/antibody_optimization/figures/fig2_elastic_net_heatmap_3000.png` — NetFavorability bar + β heatmap
-- `/home/anugraha/antibody_optimization/figures/fig3_regression_diagnostics_3000.png` — R²=0.9978, RMSE=8.48, pred vs actual + residuals
+- `/home/anugraha/antibody_optimization/figures/fig3_regression_diagnostics_3000.png` — R²=0.9981, pred vs actual + residuals
 - `/home/anugraha/antibody_optimization/figures/fig4_temporal_contributions_3000.png` — 3 panels: β×ΔF(t), β×MeanFreq bar, β×ΔF(t)
 - `/home/anugraha/antibody_optimization/figures/fig5_deltaF_vs_frame.png` — raw ΔF(t) vs frame for top 10 pairs
 
@@ -801,61 +820,71 @@ Repeated the elastic net regression analysis directly on the C1 WT pulling simul
 - Chain H: global = GRO - 194 + 302
 - Chain L: global = GRO - 314 + 195
 
-### C1 WT regression: ranked antibody residues (1500-frame, corrected energy)
+### C1 WT regression: ranked antibody residues (corrected indexing, 1500-frame)
 
 NetFavorability classification: hot (>70th percentile), warm (20–70th), cold (<20th).
 
-| Global | Chain | AA | NetFav | #Pairs | DominantSign | Class | Old (Wuhan) Class |
-|--------|-------|-----|--------|--------|-------------|-------|-------------------|
-| 227 | L:32 | TYR | 76.2 | 4 | favorable | **HOT** | HOT (119.9) |
-| 406 | H:104 | TYR | 73.4 | 4 | favorable | **HOT** | HOT (165.6) |
-| 405 | H:103 | TYR | 32.4 | 2 | favorable | **HOT** | HOT (86.0) |
-| **404** | **H:102** | **TYR** | **23.1** | **2** | **favorable** | **HOT** | HOT (104.8) |
-| 287 | L:92 | PHE | 21.8 | 1 | favorable | **HOT** | HOT (76.7) |
-| 249 | L:54 | ARG | 20.1 | 2 | favorable | **HOT** | HOT (74.5) |
-| **245** | **L:50** | **ASP** | **18.6** | **3** | **favorable** | **HOT** | lukewarm (16.2) |
-| 225 | L:30 | HIS | 5.2 | 1 | unfavorable | warm | cold (0) |
-| 246 | L:51 | ALA | 3.4 | 1 | favorable | warm | WARM (23.6) |
-| 247 | L:52 | SER | 3.1 | 2 | unfavorable | warm | — |
-| 248 | L:53 | ASN | 2.9 | 1 | favorable | warm | cold (0) |
-| 288 | L:93 | ASN | 2.6 | 1 | unfavorable | warm | cold (0) |
-| 401 | H:99 | GLU | 2.5 | 1 | favorable | warm | — |
-| 244 | L:49 | PHE | 2.0 | 1 | favorable | warm | DESTABILIZING (-16.3) |
-| **258** | **L:63** | **SER** | **1.9** | **1** | **unfavorable** | **warm** | — |
-| 255 | L:60 | ALA | 1.5 | 1 | unfavorable | warm | — |
-| 334 | H:32 | TYR | 1.4 | 1 | favorable | warm | — |
-| 306 | H:4 | LEU | 1.3 | 1 | unfavorable | warm | — |
+| Global | Chain | AA | NetFav | #Pairs | DominantSign | Class | Mutation tested? |
+|--------|-------|-----|--------|--------|-------------|-------|-----------------|
+| **406** | **H:104** | **TYR** | **80.6** | **5** | **favorable** | **HOT** | Y406W (running) |
+| **227** | **L:32** | **TYR** | **67.0** | **5** | **favorable** | **HOT** | Y227W (running) |
+| 405 | H:103 | TYR | 34.3 | 5 | favorable | **HOT** | Y405N (failed — non-conservative) |
+| 404 | H:102 | TYR | 23.4 | 3 | favorable | **HOT** | Y404W (-2.7), Y404H (+2.5) |
+| 245 | L:50 | ASP | 23.2 | 4 | favorable | **HOT** | D245N (-18.2) ✓ |
+| 287 | L:92 | PHE | 17.7 | 1 | favorable | **HOT** | F287W (-33.7) ✓ |
+| 249 | L:54 | ARG | 16.2 | 2 | favorable | **HOT** | — |
+| 246 | L:51 | ALA | 7.8 | 3 | favorable | **HOT** | A246Y (-6.1) |
+| 248 | L:53 | ASN | 6.2 | 2 | favorable | warm | N248Y (-10.9) ✓ |
+| **306** | **H:4** | **LEU** | **5.8** | **1** | **unfavorable** | **warm** | L306G (running) |
+| **330** | **H:28** | **THR** | **3.7** | **1** | **unfavorable** | **warm** | T330G (running) |
+| 401 | H:99 | GLU | 3.5 | 1 | favorable | warm | — |
+| 244 | L:49 | PHE | 3.4 | 3 | favorable | warm | — |
+| **247** | **L:52** | **SER** | **3.4** | **2** | **unfavorable** | **warm** | S247G (running) |
+| 288 | L:93 | ASN | 2.8 | 1 | unfavorable | warm | — |
+| 334 | H:32 | TYR | 2.1 | 1 | favorable | warm | — |
+| 225 | L:30 | HIS | 1.9 | 2 | unfavorable | warm | — |
+| 262 | L:67 | SER | 1.9 | 1 | favorable | warm | S262Y (-15.0) ✓ |
+| 255 | L:60 | ALA | 1.6 | 1 | unfavorable | warm | — |
+| 357 | H:55 | GLY | 1.2 | 1 | favorable | warm | — |
 | 222 | L:27 | GLN | 1.2 | 1 | favorable | warm | — |
+| 378 | H:76 | LYS | 1.1 | 1 | favorable | cold | — |
+| 332 | H:30 | SER | 0.4 | 1 | favorable | cold | — |
 | 256 | L:61 | ARG | 0.3 | 1 | unfavorable | cold | — |
-| 377 | H:75 | SER | 0.2 | 1 | favorable | cold | — |
-| 223 | L:28 | SER | 0.2 | 1 | favorable | cold | — |
-| 260 | L:65 | SER | 0.04 | 1 | unfavorable | cold | cold (0) |
-| 378 | H:76 | LYS | 0.03 | 1 | favorable | cold | — |
+| 260 | L:65 | SER | 0.3 | 1 | unfavorable | cold | — |
+| 223 | L:28 | SER | 0.3 | 1 | favorable | cold | — |
+| 289 | L:94 | TRP | 0.1 | 1 | favorable | cold | — |
 
-### Top 10 pairwise contacts (non-zero β)
+**Notable absences** (SASA-filtered at pulling frame 0, below 0.5 nm² threshold):
+- **D265** (L:70): Our #1 hit by MM-GBSA (ΔΔG = -39.4). Was WARM (24.3) in Wuhan regression. SASA = 0.31 nm² at pulling frame 0.
+- **S262** (L:67): Now barely warm (NF=1.9). Was WARM (50.8) in Wuhan. S262Y gave ΔΔG = -15.0.
+
+### Top 12 pairwise contacts (non-zero β, corrected indexing)
 
 | Antigen | Antibody | β | MeanFreq | |β×F| | Sign |
 |---------|----------|-------|----------|------|------|
-| A:K84 | L:Y227 | -0.415 | 143.8 | 59.6 | favorable |
-| A:Q160 | H:Y406 | -0.259 | 161.1 | 41.7 | favorable |
-| A:F157 | H:Y406 | -0.128 | 184.4 | 23.6 | favorable |
-| A:F123 | L:F287 | -0.234 | 93.4 | 21.8 | favorable |
-| A:V150 | H:Y405 | -0.164 | 123.4 | 20.2 | favorable |
-| A:Y172 | L:R249 | -0.128 | 150.3 | 19.3 | favorable |
-| A:F157 | H:Y404 | -0.197 | 92.9 | 18.3 | favorable |
-| A:Y172 | L:D245 | -0.193 | 66.4 | 12.8 | favorable |
-| A:E151 | H:Y405 | -0.053 | 232.0 | 12.2 | favorable |
-| A:Q160 | L:Y227 | -0.074 | 136.8 | 10.1 | favorable |
+| A:K84 | L:Y227 | -0.352 | 143.8 | 50.6 | favorable |
+| A:Q160 | H:Y406 | -0.247 | 161.1 | 39.8 | favorable |
+| A:F157 | H:Y406 | -0.149 | 184.4 | 27.5 | favorable |
+| A:F123 | L:F287 | -0.189 | 93.4 | 17.7 | favorable |
+| A:V150 | H:Y405 | -0.134 | 123.4 | 16.6 | favorable |
+| A:Y172 | L:R249 | -0.104 | 150.3 | 15.6 | favorable |
+| A:E151 | H:Y405 | -0.067 | 232.0 | 15.4 | favorable |
+| A:F157 | H:Y404 | -0.158 | 92.9 | 14.7 | favorable |
+| A:Q160 | L:Y227 | -0.079 | 136.8 | 10.9 | favorable |
+| A:Y172 | L:D245 | -0.158 | 66.4 | 10.5 | favorable |
+| A:R70 | L:D245 | -0.193 | 49.4 | 9.5 | favorable |
+| A:F123 | H:Y406 | -0.041 | 153.7 | 6.3 | favorable |
 
-### Key differences from old (Wuhan/Omicron) regression
-1. **Core hot spots preserved**: Y227, Y406, Y405, F287, R249 are HOT in both systems
-2. **Y404 remains HOT**: Was HOT (104.8) in Wuhan, initially appeared WARM in preliminary C1 WT analysis (truncated data), but HOT (23.1) with corrected 1500-frame regression
-3. **D245 promoted to HOT**: Was lukewarm (16.2) in Wuhan → HOT (18.6) in corrected C1 WT analysis
-4. **R374 disappeared**: HOT (74.0) → absent in new analysis
-5. **S258 is NEW and unfavorable**: warm classification but unfavorable dominant sign — mutation target
-6. **D265 absent**: SASA = 0.31 nm² (below 0.5 threshold at frame 0 of pulling), filtered out. Was WARM (24.3) in old analysis. Still our best single mutation by MM-GBSA.
-7. **S262 absent**: also filtered by SASA in C1 WT pulling frame 0. Was WARM (50.8) in old.
-8. **Several new warm unfavorable residues**: H225, S247, N288, A255, L306 — all have unfavorable dominant contacts
+### Key changes from contaminated → corrected regression
+1. **Off-by-one bug fixed**: mdtraj `resid` is 0-based; old code used 1-based GRO numbers. `resid 1 to 194` selected resSeq 2-195, including antibody GRO 195 in the antigen group. Fixed to `resid 0 to 193` / `resid 194 to 420`.
+2. **l1_ratio dropped 0.90 → 0.50**: Model is less sparse (52 vs 36 non-zero β), uses more features with smaller coefficients. More ridge-like regularization.
+3. **Y406 became #1** (NF 73.4 → 80.6): Previously masked by contamination. Now the highest-leverage position.
+4. **Y227 stable at #2** (NF 76.2 → 67.0): Slight decrease but remains top hot spot.
+5. **New residues appeared**: T330 (warm/unfav), G357 (warm/fav), K378 (cold/fav) — not detected in contaminated regression.
+6. **L306 signal increased** (NF 1.3 → 5.8): Unfavorable contact now more prominent.
+7. **S258 dropped below top 20**: Was warm/unfavorable (1.9) in contaminated, now absent. S258G still worked (ΔΔG = -16.5) — mutation target didn't need high regression signal.
+8. **D265 still absent**: SASA-filtered. Our #1 hit (-39.4 ΔΔG) is not detectable by this regression approach.
+9. **S262 barely warm** (NF=1.9): Was absent before, now appears weakly. S262Y gave -15.0 ΔΔG despite low signal.
 
 ### Revised mutation strategy (post-Round 3)
 
@@ -890,18 +919,22 @@ Hot spot rule: **2/5 correct (40%)**. Warm spot rule: 3/4 correct (75%). The cla
 
 ### Future mutation candidates (revised strategy)
 
-**High-leverage charge removal** (highest priority — proven chemistry):
-- **E401** (H:99, NF=2.5, favorable): Glu→Gln charge removal. Same D→N logic applied to Glu.
-  - Note: E401 is warm, not hot — may have smaller effect, but charge removal is reliable
+**High-leverage aromatic extension** (proven chemistry, submitted):
+- **Y406W** (H:104, NF=80.6, HOT): #1 hot spot. Tyr→Trp extends aromatic platform. **Submitted** (job 754685).
+- **Y227W** (L:32, NF=67.0, HOT): #2 hot spot. Same Tyr→Trp logic. **Submitted** (job 754684).
+- **Y405W** (H:103, NF=34.3, HOT): #3 hot spot. Y405N failed but Trp is conservative aromatic — different chemistry.
 
-**High-leverage aromatic extension** (proven chemistry):
-- **Y227W** (L:32, NF=76.2, HOT): Top hot spot. Tyr→Trp extends aromatic platform. Highest leverage position available.
-- **Y406W** (H:104, NF=73.4, HOT): Second hot spot. Same Tyr→Trp logic.
-- **Y405W** (H:103, NF=32.4, HOT): Third hot spot. Y405N failed but Trp is conservative aromatic — different chemistry.
+**Unfavorable contact removal** (submitted):
+- **L306G** (H:4, NF=5.8, unfavorable): Largest unfavorable signal. Leu→Gly removes destabilizing contact. **Submitted** (job 754686).
+- **T330G** (H:28, NF=3.7, unfavorable): Same →Gly strategy. **Submitted** (job 754687).
+- **S247G** (L:52, NF=3.4, unfavorable): Same logic as S258G (-16.5). **Submitted** (job 754688).
 
-**Unfavorable contact removal**:
-- **H225G** (L:30, NF=5.2, unfavorable): destabilizing contact; Gly removes it completely
-- **S247G** (L:52, NF=3.1, unfavorable): same logic
-- **N288A** (L:93, NF=2.6, unfavorable): adjacent to F287
+**High-leverage charge removal** (next priority):
+- **E401Q** (H:99, NF=3.5, favorable): Glu→Gln charge removal. Same D→N logic applied to Glu.
+
+**Remaining untested**:
+- **R249** (L:54, NF=16.2, HOT): Arg — could try R249K (conservative) or R249W (aromatic)
+- **H225G** (L:30, NF=1.9, unfavorable): destabilizing contact; Gly removes it
+- **N288A** (L:93, NF=2.8, unfavorable): adjacent to F287; remove destabilizing contact
 
 D265N remains the top performer by MM-GBSA (-64.73 kcal/mol) despite being absent from the C1 WT regression (SASA-filtered at pulling frame 0).
