@@ -72,6 +72,7 @@ ALL_MMGBSA = [
     ('WT',     -25.31, 0.86, 'Baseline'),
     ('Y404H',  -22.79, 0.77, 'Failed'),
     ('L306G',  -16.35, 0.60, 'Failed'),
+    ('Y157A',  -13.73, 1.49, 'Failed'),
 ]
 
 CHEM_COLORS = {
@@ -316,6 +317,7 @@ def make_figure3():
         ('Aromatic add.\n(\u2192Tyr)',       3, 0),
         ('Side chain rem.\n(\u2192Gly)',     2, 1),
         ('Non-conserv.\nat aromatic',        0, 1),
+        ('Ala control',                      0, 1),
     ]
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5.5),
@@ -352,6 +354,7 @@ def make_figure3():
         'Aromatic addition':  [(-15.0, 'S262Y'), (-10.9, 'N248Y'), (-6.1, 'A246Y')],
         'Side chain removal': [(-31.6, 'S247G'), (-16.2, 'T330G'), (+9.0, 'L306G')],
         'Non-conservative':   [(+2.5, 'Y404H')],
+        'Ala control':        [(+11.6, 'Y157A')],
     }
     chem_colors_strip = {
         'Charge removal': '#1976D2',
@@ -359,6 +362,7 @@ def make_figure3():
         'Side chain removal': '#F57C00',
         'Aromatic addition': '#7B1FA2',
         'Non-conservative': '#C62828',
+        'Ala control': '#795548',
     }
 
     ax2.axhline(0, color='#616161', ls='--', lw=1, alpha=0.5)
