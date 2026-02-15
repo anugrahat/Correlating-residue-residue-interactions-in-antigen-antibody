@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 """
-Publication figures for elastic net regression story (corrected regression only).
-  Fig 1: Elastic net regression — fit, top contacts, residue ranking
-  Fig 2: MM-GBSA validation — only mutations identified by corrected regression
-  Fig 3: NetFavorability vs ΔΔG — does regression signal predict effect size?
+Publication-quality figures for elastic net regression + MM-GBSA validation.
 """
 
 import numpy as np
@@ -16,6 +13,25 @@ from matplotlib.patches import Patch
 from sklearn.linear_model import ElasticNetCV
 from sklearn.metrics import r2_score, mean_squared_error
 import os
+
+# ==============================================================================
+# Global style
+# ==============================================================================
+plt.rcParams.update({
+    'font.family': 'sans-serif',
+    'font.sans-serif': ['Arial', 'Helvetica', 'DejaVu Sans'],
+    'font.size': 10,
+    'axes.linewidth': 1.0,
+    'axes.labelsize': 12,
+    'axes.titlesize': 13,
+    'xtick.labelsize': 10,
+    'ytick.labelsize': 10,
+    'legend.fontsize': 9,
+    'figure.dpi': 300,
+    'savefig.dpi': 300,
+    'savefig.bbox': 'tight',
+    'savefig.pad_inches': 0.1,
+})
 
 # ==============================================================================
 # Config
@@ -40,31 +56,32 @@ AA3_TO_1 = {
     "TRP": "W", "TYR": "Y", "VAL": "V",
 }
 
-# MM-GBSA data: ONLY mutations present in corrected regression
-# (mutation, dG, SEM, NF, chemistry)
-MMGBSA_DATA = [
-    ('F287W',  -58.99, 1.44, 17.7, 'Aromatic extension'),
-    ('S247G',  -56.87, 1.20,  3.4, 'Unfavorable removal'),
-    ('D245N',  -43.47, 1.10, 23.2, 'Charge removal'),
-    ('T330G',  -41.47, 0.65,  3.7, 'Unfavorable removal'),
-    ('N248Y',  -36.20, 1.01,  6.2, 'Aromatic addition'),
-    ('Y227W',  -35.99, 0.58, 67.0, 'Aromatic extension'),
-    ('A246Y',  -31.41, 0.81,  7.8, 'Aromatic addition'),
-    ('Y404W',  -28.00, 0.96, 23.4, 'Aromatic extension'),
-    ('WT',     -25.31, 0.86,  0.0, 'Baseline'),
-    ('Y404H',  -22.79, 0.77, 23.4, 'Non-conservative'),
-    ('L306G',  -16.35, 0.60,  5.8, 'Unfavorable removal'),
-    ('Y157A',  -13.73, 1.49,  0.0, 'Negative control'),
+# All MM-GBSA results — ONLY residues present in the corrected regression
+# Excluded: D265N (D265 SASA-filtered), S258G/S258A (S258 not in regression),
+#           T403Y (T403 not in regression), Y157A (Y157 not in regression)
+ALL_MMGBSA = [
+    ('F287W',  -58.99, 1.44, 'Aromatic extension'),
+    ('S247G',  -56.87, 1.20, 'Side chain removal'),
+    ('D245N',  -43.47, 1.10, 'Charge removal'),
+    ('T330G',  -41.47, 0.65, 'Side chain removal'),
+    ('S262Y',  -40.28, 1.20, 'Aromatic addition'),
+    ('N248Y',  -36.20, 1.01, 'Aromatic addition'),
+    ('Y227W',  -35.99, 0.58, 'Aromatic extension'),
+    ('A246Y',  -31.41, 0.81, 'Aromatic addition'),
+    ('Y404W',  -28.00, 0.96, 'Aromatic extension'),
+    ('WT',     -25.31, 0.86, 'Baseline'),
+    ('Y404H',  -22.79, 0.77, 'Failed'),
+    ('L306G',  -16.35, 0.60, 'Failed'),
 ]
 
 CHEM_COLORS = {
-    'Charge removal':     '#1f77b4',
-    'Aromatic extension': '#2ca02c',
-    'Aromatic addition':  '#9467bd',
-    'Unfavorable removal':'#ff7f0e',
-    'Baseline':           '#555555',
-    'Non-conservative':   '#d62728',
-    'Negative control':   '#d62728',
+    'Charge removal':     '#1976D2',
+    'Aromatic extension': '#388E3C',
+    'Aromatic addition':  '#7B1FA2',
+    'Side chain removal': '#F57C00',
+    'Baseline':           '#616161',
+    'Failed':             '#C62828',
+    'Negative control':   '#C62828',
 }
 
 
@@ -107,12 +124,12 @@ def get_label(gro_resid, resnames):
 # ==============================================================================
 def make_figure1():
     print("=" * 70)
-    print("FIGURE 1: Elastic Net Regression (corrected indexing)")
+    print("FIGURE 1: Elastic Net Regression")
     print("=" * 70)
 
     resnames = load_gro_resnames(GRO_PATH)
 
-    # Load and prepare data
+    # Load data
     df_energy = pd.read_csv(ENERGY_FILE)
     df_frequency = pd.read_csv(FREQ_FILE)
     freq_col = 'MeanFrequency' if 'MeanFrequency' in df_frequency.columns else 'InteractionFrequency'
@@ -131,7 +148,7 @@ def make_figure1():
     y = dE.values
     pair_names = dF.columns.tolist()
 
-    # Fit regression
+    # Fit
     print("Fitting ElasticNetCV...")
     model = ElasticNetCV(
         alphas=np.logspace(-2, 2, 10),
@@ -144,263 +161,258 @@ def make_figure1():
     r2 = r2_score(y, y_pred)
     rmse = np.sqrt(mean_squared_error(y, y_pred))
     n_nz = (model.coef_ != 0).sum()
-
-    # Load pre-computed net favorability
     df_nf = pd.read_csv(NF_FILE)
 
-    # ---- Create figure: 3 panels ----
-    fig = plt.figure(figsize=(18, 6))
-    gs = gridspec.GridSpec(1, 3, width_ratios=[1, 1.2, 1.3], wspace=0.35)
+    # ---- Figure ----
+    fig = plt.figure(figsize=(18, 5.5))
+    gs = gridspec.GridSpec(1, 3, width_ratios=[1, 1.2, 1.3], wspace=0.32)
 
-    # --- Panel A: Predicted vs Actual ---
+    # --- Panel A ---
     ax1 = fig.add_subplot(gs[0])
-    ax1.scatter(y, y_pred, s=3, alpha=0.3, c='steelblue', edgecolors='none', rasterized=True)
+    ax1.scatter(y, y_pred, s=4, alpha=0.35, c='#1565C0', edgecolors='none', rasterized=True)
     lims = [min(y.min(), y_pred.min()) - 10, max(y.max(), y_pred.max()) + 10]
-    ax1.plot(lims, lims, 'k--', lw=1, alpha=0.5)
-    ax1.set_xlim(lims)
-    ax1.set_ylim(lims)
-    ax1.set_xlabel(r'Actual $\Delta E$ (kJ/mol)', fontsize=11)
-    ax1.set_ylabel(r'Predicted $\Delta E$ (kJ/mol)', fontsize=11)
-    ax1.set_title('A) Elastic Net Regression Fit', fontsize=12, fontweight='bold')
-    stats_text = (
-        f'$R^2$ = {r2:.4f}\n'
-        f'RMSE = {rmse:.1f} kJ/mol\n'
-        f'{n_nz}/{len(pair_names)} non-zero $\\beta$\n'
-        f'$\\alpha$ = {model.alpha_:.2f}, $\\ell_1$ = {model.l1_ratio_:.2f}'
-    )
-    ax1.text(0.05, 0.95, stats_text, transform=ax1.transAxes, fontsize=9,
-             verticalalignment='top', bbox=dict(boxstyle='round,pad=0.4', facecolor='wheat', alpha=0.8))
-    eq_text = r'$\Delta E(t) = \sum_k \beta_k \cdot \Delta F_k(t)$'
-    ax1.text(0.5, -0.18, eq_text, transform=ax1.transAxes, fontsize=13,
-             ha='center', style='italic')
+    ax1.plot(lims, lims, 'k-', lw=0.8, alpha=0.4)
+    ax1.set_xlim(lims); ax1.set_ylim(lims)
+    ax1.set_xlabel(r'Actual $\Delta E$ (kJ/mol)')
+    ax1.set_ylabel(r'Predicted $\Delta E$ (kJ/mol)')
+    ax1.set_title('A', fontweight='bold', loc='left', fontsize=14)
+    stats = (f'$R^2$ = {r2:.4f}\nRMSE = {rmse:.1f} kJ/mol\n'
+             f'{n_nz}/{len(pair_names)} non-zero $\\beta$')
+    ax1.text(0.05, 0.95, stats, transform=ax1.transAxes, fontsize=9,
+             va='top', bbox=dict(boxstyle='round,pad=0.3', fc='white', ec='#ccc', alpha=0.9))
+    eq = r'$\Delta E(t) = \sum_k \beta_k \cdot \Delta F_k(t)$'
+    ax1.text(0.5, -0.15, eq, transform=ax1.transAxes, fontsize=12, ha='center', style='italic')
 
-    # --- Panel B: Top 15 |beta x MeanFreq| pairs ---
+    # --- Panel B ---
     ax2 = fig.add_subplot(gs[1])
     df_coeff = pd.read_csv(COEFF_FILE)
     nz = df_coeff[df_coeff['Beta'] != 0].copy()
     nz['AbsBxF'] = nz['Beta_x_MeanFreq'].abs()
     top15 = nz.nlargest(15, 'AbsBxF').iloc[::-1]
-
-    labels = []
-    colors = []
+    labels, colors = [], []
     for _, r in top15.iterrows():
-        pair = r['ResiduePair']
-        parts = pair.split('-')
-        g1, g2 = int(parts[0]), int(parts[1])
-        l1 = get_label(g1, resnames)
-        l2 = get_label(g2, resnames)
-        labels.append(f"{l1}\u2013{l2}")
-        colors.append('#2166ac' if r['Beta'] < 0 else '#b2182b')
-
+        g1, g2 = [int(x) for x in r['ResiduePair'].split('-')]
+        labels.append(f"{get_label(g1, resnames)}\u2013{get_label(g2, resnames)}")
+        colors.append('#1565C0' if r['Beta'] < 0 else '#C62828')
     y_pos = np.arange(len(top15))
-    ax2.barh(y_pos, top15['AbsBxF'].values, color=colors, edgecolor='white', linewidth=0.5, height=0.7)
+    ax2.barh(y_pos, top15['AbsBxF'].values, color=colors, edgecolor='white', lw=0.3, height=0.65)
     ax2.set_yticks(y_pos)
-    ax2.set_yticklabels(labels, fontsize=8.5, fontfamily='monospace')
-    ax2.set_xlabel(r'$|\beta_k \times \bar{F}_k|$', fontsize=11)
-    ax2.set_title(r'B) Top Contact Contributions', fontsize=12, fontweight='bold')
-    legend_b = [
-        Patch(facecolor='#2166ac', label='Favorable ($\\beta < 0$)'),
-        Patch(facecolor='#b2182b', label='Unfavorable ($\\beta > 0$)')
-    ]
-    ax2.legend(handles=legend_b, loc='lower right', fontsize=8, framealpha=0.9)
+    ax2.set_yticklabels(labels, fontsize=8, fontfamily='monospace')
+    ax2.set_xlabel(r'$|\beta_k \times \bar{F}_k|$')
+    ax2.set_title('B', fontweight='bold', loc='left', fontsize=14)
+    ax2.legend(handles=[Patch(fc='#1565C0', label='Stabilizing ($\\beta<0$)'),
+                        Patch(fc='#C62828', label='Destabilizing ($\\beta>0$)')],
+               loc='lower right', fontsize=8, framealpha=0.9)
 
-    # --- Panel C: NetFavorability by antibody residue ---
+    # --- Panel C ---
     ax3 = fig.add_subplot(gs[2])
-    df_nf_plot = df_nf[df_nf['NetFavorability'] > 0.5].copy()
-    df_nf_plot = df_nf_plot.sort_values('NetFavorability', ascending=True)
-
-    bar_colors = []
+    df_nf_plot = df_nf[df_nf['NetFavorability'] > 0.5].sort_values('NetFavorability', ascending=True)
+    bar_c = []
     for _, r in df_nf_plot.iterrows():
-        clf = r['Classification']
-        if clf == 'hot':
-            bar_colors.append('#d62728')
-        elif clf == 'warm':
-            if r['DominantSign'] == 'unfavorable':
-                bar_colors.append('#ff7f0e')
-            else:
-                bar_colors.append('#2ca02c')
+        if r['Classification'] == 'hot':
+            bar_c.append('#C62828')
+        elif r['DominantSign'] == 'unfavorable':
+            bar_c.append('#F57C00')
         else:
-            bar_colors.append('#7f7f7f')
+            bar_c.append('#388E3C')
+    y_nf = np.arange(len(df_nf_plot))
+    ax3.barh(y_nf, df_nf_plot['NetFavorability'].values, color=bar_c, edgecolor='white', lw=0.3, height=0.65)
+    ax3.set_yticks(y_nf)
+    ax3.set_yticklabels(df_nf_plot['Label'].values, fontsize=8, fontfamily='monospace')
+    ax3.set_xlabel(r'NetFavorability $\left(\sum |\beta_k \times \bar{F}_k|\right)$')
+    ax3.set_title('C', fontweight='bold', loc='left', fontsize=14)
+    ax3.legend(handles=[Patch(fc='#C62828', label='Hot spot'),
+                        Patch(fc='#388E3C', label='Warm (favorable)'),
+                        Patch(fc='#F57C00', label='Warm (unfavorable)')],
+               loc='lower right', fontsize=8, framealpha=0.9)
+    p70 = np.percentile(df_nf['NetFavorability'].values[df_nf['NetFavorability'].values > 0], 70)
+    ax3.axvline(p70, color='#C62828', ls=':', lw=1, alpha=0.5)
 
-    y_pos_nf = np.arange(len(df_nf_plot))
-    ax3.barh(y_pos_nf, df_nf_plot['NetFavorability'].values, color=bar_colors,
-             edgecolor='white', linewidth=0.5, height=0.7)
-    ax3.set_yticks(y_pos_nf)
-    ax3.set_yticklabels(df_nf_plot['Label'].values, fontsize=8.5, fontfamily='monospace')
-    ax3.set_xlabel('NetFavorability  ' + r'$\left(\sum |\beta_k \times \bar{F}_k|\right)$', fontsize=10)
-    ax3.set_title('C) Antibody Residue Ranking', fontsize=12, fontweight='bold')
-    legend_c = [
-        Patch(facecolor='#d62728', label='Hot (high leverage)'),
-        Patch(facecolor='#2ca02c', label='Warm (favorable)'),
-        Patch(facecolor='#ff7f0e', label='Warm (unfavorable)'),
-    ]
-    ax3.legend(handles=legend_c, loc='lower right', fontsize=8, framealpha=0.9)
-    all_nf = df_nf['NetFavorability'].values
-    p70 = np.percentile(all_nf[all_nf > 0], 70)
-    ax3.axvline(p70, color='red', ls='--', lw=1, alpha=0.6)
-    ax3.text(p70 + 0.5, len(df_nf_plot) - 1, '70th\npctl', fontsize=7, color='red', va='top')
+    for ax in [ax1, ax2, ax3]:
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
 
-    plt.savefig(os.path.join(FIG_DIR, 'fig_regression.png'), dpi=300, bbox_inches='tight')
-    plt.savefig(os.path.join(FIG_DIR, 'fig_regression.pdf'), bbox_inches='tight')
+    plt.savefig(os.path.join(FIG_DIR, 'fig_regression.png'), dpi=300)
+    plt.savefig(os.path.join(FIG_DIR, 'fig_regression.pdf'))
     print("Saved fig_regression.png/pdf")
     plt.close()
 
 
 # ==============================================================================
-# FIGURE 2: MM-GBSA Bar Chart (only corrected regression targets)
+# FIGURE 2: MM-GBSA — ALL mutations, grouped by chemistry
 # ==============================================================================
 def make_figure2():
     print("=" * 70)
-    print("FIGURE 2: MM-GBSA Validation (corrected regression only)")
+    print("FIGURE 2: MM-GBSA Validation (all mutations)")
     print("=" * 70)
 
-    names = [d[0] for d in MMGBSA_DATA]
-    dGs = np.array([d[1] for d in MMGBSA_DATA])
-    SEMs = np.array([d[2] for d in MMGBSA_DATA])
-    NFs = np.array([d[3] for d in MMGBSA_DATA])
-    chems = [d[4] for d in MMGBSA_DATA]
+    names = [d[0] for d in ALL_MMGBSA]
+    dGs = np.array([d[1] for d in ALL_MMGBSA])
+    SEMs = np.array([d[2] for d in ALL_MMGBSA])
+    chems = [d[3] for d in ALL_MMGBSA]
     colors = [CHEM_COLORS[c] for c in chems]
 
-    fig, ax = plt.subplots(figsize=(13, 7))
+    fig, ax = plt.subplots(figsize=(12, 5.5))
     x = np.arange(len(names))
-    bars = ax.bar(x, dGs, yerr=SEMs, capsize=4, color=colors, edgecolor='white',
-                  linewidth=0.8, width=0.7, error_kw=dict(lw=1.2, capthick=1.2))
+
+    bars = ax.bar(x, dGs, yerr=SEMs, capsize=3, color=colors, edgecolor='white',
+                  linewidth=0.5, width=0.72, error_kw=dict(lw=1, capthick=1, color='#333'))
 
     # WT baseline
-    ax.axhline(WT_DG, color='#555555', ls='--', lw=1.5, alpha=0.7)
-    ax.text(len(names) - 0.5, WT_DG + 0.8, f'WT = {WT_DG:.1f}', fontsize=9,
-            ha='right', color='#555555', fontweight='bold')
+    ax.axhline(WT_DG, color='#616161', ls='--', lw=1.2, alpha=0.6)
+    ax.text(len(names) - 0.3, WT_DG + 1.2, f'WT = {WT_DG:.1f}', fontsize=8,
+            ha='right', color='#616161', fontweight='bold')
 
-    # Annotate ΔΔG and NF on each bar
-    for i, (name, dg, sem, nf, chem) in enumerate(MMGBSA_DATA):
-        if name in ('WT', 'Y157A'):
+    # ΔΔG annotations
+    for i, (name, dg, sem, chem) in enumerate(ALL_MMGBSA):
+        if name == 'WT':
             continue
         ddg = dg - WT_DG
         sign = '+' if ddg > 0 else ''
-        va = 'top' if dg < WT_DG else 'bottom'
-        offset = -1.8 if dg < WT_DG else 1.8
-        ax.text(i, dg + offset, f'{sign}{ddg:.1f}\n(NF={nf:.0f})', ha='center', va=va,
-                fontsize=7.5, fontweight='bold', color='black')
-
-    # Mark Y157A
-    y157_idx = names.index('Y157A')
-    ax.annotate('Antigen residue\n(negative control)',
-                xy=(y157_idx, dGs[y157_idx]),
-                xytext=(y157_idx - 4, -5),
-                fontsize=9, ha='center',
-                arrowprops=dict(arrowstyle='->', color='#d62728', lw=1.5),
-                color='#d62728', fontweight='bold')
+        if dg < WT_DG:
+            ax.text(i, dg - 1.5, f'{sign}{ddg:.0f}', ha='center', va='top',
+                    fontsize=7, fontweight='bold', color='#333')
+        else:
+            ax.text(i, dg + 1.5, f'{sign}{ddg:.0f}', ha='center', va='bottom',
+                    fontsize=7, fontweight='bold', color='#333')
 
     ax.set_xticks(x)
-    ax.set_xticklabels(names, fontsize=10, rotation=35, ha='right')
-    ax.set_ylabel(r'$\Delta G_{bind}$ (kcal/mol)', fontsize=12)
-    ax.set_title('MM-GBSA: Mutations Identified by Corrected Elastic Net Regression',
-                 fontsize=13, fontweight='bold')
+    ax.set_xticklabels(names, rotation=40, ha='right', fontsize=9)
+    ax.set_ylabel(r'$\Delta G_{\mathrm{bind}}$ (kcal/mol)')
+    ax.set_title('MM-GBSA Binding Free Energy', fontweight='bold', fontsize=13)
 
-    # Arrow for binding direction
-    ax.annotate('', xy=(-0.08, 0.15), xytext=(-0.08, 0.85),
+    # Arrow
+    ax.annotate('', xy=(-0.06, 0.1), xytext=(-0.06, 0.9),
                 xycoords='axes fraction',
-                arrowprops=dict(arrowstyle='->', color='green', lw=2))
-    ax.text(-0.1, 0.5, 'Stronger\nbinding', transform=ax.transAxes,
-            fontsize=9, color='green', va='center', ha='center', rotation=90)
+                arrowprops=dict(arrowstyle='->', color='#388E3C', lw=1.8))
+    ax.text(-0.08, 0.5, 'Stronger\nbinding', transform=ax.transAxes,
+            fontsize=8, color='#388E3C', va='center', ha='center', rotation=90)
 
     legend_elements = [
-        Patch(facecolor='#1f77b4', label='Charge removal (D\u2192N)'),
-        Patch(facecolor='#2ca02c', label='Aromatic extension (\u2192Trp)'),
-        Patch(facecolor='#9467bd', label='Aromatic addition (\u2192Tyr)'),
-        Patch(facecolor='#ff7f0e', label='Unfavorable removal (\u2192Gly)'),
-        Patch(facecolor='#d62728', label='Failed / Negative control'),
-        Patch(facecolor='#555555', label='WT baseline'),
+        Patch(fc='#1976D2', label='Charge removal (D/E\u2192N/Q)'),
+        Patch(fc='#388E3C', label='Aromatic extension (\u2192Trp)'),
+        Patch(fc='#7B1FA2', label='Aromatic addition (\u2192Tyr)'),
+        Patch(fc='#F57C00', label='Side chain removal (\u2192Gly)'),
+        Patch(fc='#C62828', label='Failed / Control'),
+        Patch(fc='#616161', label='WT'),
     ]
-    ax.legend(handles=legend_elements, loc='upper left', fontsize=9, framealpha=0.9,
-              bbox_to_anchor=(0.02, 0.98))
+    ax.legend(handles=legend_elements, loc='upper right', fontsize=8,
+              framealpha=0.95, edgecolor='#ccc', ncol=2)
 
     ax.set_xlim(-0.6, len(names) - 0.4)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
-    plt.savefig(os.path.join(FIG_DIR, 'fig_mmgbsa_validation.png'), dpi=300, bbox_inches='tight')
-    plt.savefig(os.path.join(FIG_DIR, 'fig_mmgbsa_validation.pdf'), bbox_inches='tight')
+    plt.savefig(os.path.join(FIG_DIR, 'fig_mmgbsa_validation.png'), dpi=300)
+    plt.savefig(os.path.join(FIG_DIR, 'fig_mmgbsa_validation.pdf'))
     print("Saved fig_mmgbsa_validation.png/pdf")
     plt.close()
 
 
 # ==============================================================================
-# FIGURE 3: NetFavorability vs ΔΔG scatter
+# FIGURE 3: Chemistry success rate summary
 # ==============================================================================
 def make_figure3():
     print("=" * 70)
-    print("FIGURE 3: Regression Signal vs Binding Improvement")
+    print("FIGURE 3: Chemistry Success Rates")
     print("=" * 70)
 
-    # Only mutations with both NF and ΔΔG (exclude WT, Y157A)
-    scatter_data = [d for d in MMGBSA_DATA if d[0] not in ('WT', 'Y157A')]
-
-    fig, ax = plt.subplots(figsize=(8, 6))
-
-    for name, dg, sem, nf, chem in scatter_data:
-        ddg = dg - WT_DG
-        color = CHEM_COLORS[chem]
-        marker = 'o' if ddg < 0 else 'X'
-        size = 120 if ddg < 0 else 100
-        ax.scatter(nf, ddg, c=color, s=size, marker=marker, edgecolors='black',
-                   linewidths=0.8, zorder=5)
-        # Label each point
-        x_off = 6
-        y_off = 4
-        if name == 'Y404W':
-            y_off = 3
-            x_off = 6
-        elif name == 'Y404H':
-            y_off = -8
-            x_off = 6
-        elif name == 'F287W':
-            y_off = 6
-            x_off = 4
-        elif name == 'N248Y':
-            x_off = 6
-            y_off = -8
-        elif name == 'A246Y':
-            x_off = 6
-            y_off = 4
-        elif name == 'L306G':
-            x_off = 6
-            y_off = -4
-        ax.annotate(name, (nf, ddg), xytext=(x_off, y_off),
-                    textcoords='offset points', fontsize=8.5, fontweight='bold')
-
-    # Zero line
-    ax.axhline(0, color='#555555', ls='--', lw=1, alpha=0.5)
-    ax.text(70, 1, 'WT baseline', fontsize=8, color='#555555')
-
-    # Shade improvement zone
-    ax.axhspan(ax.get_ylim()[0], 0, alpha=0.05, color='green')
-
-    ax.set_xlabel('NetFavorability (regression signal)', fontsize=12)
-    ax.set_ylabel(r'$\Delta\Delta G$ vs WT (kcal/mol)', fontsize=12)
-    ax.set_title('Regression Signal vs Binding Improvement', fontsize=13, fontweight='bold')
-
-    legend_elements = [
-        Patch(facecolor='#1f77b4', label='Charge removal'),
-        Patch(facecolor='#2ca02c', label='Aromatic extension'),
-        Patch(facecolor='#9467bd', label='Aromatic addition'),
-        Patch(facecolor='#ff7f0e', label='Unfavorable removal'),
-        Patch(facecolor='#d62728', label='Non-conservative'),
+    # (chemistry, successes, failures) — only corrected-regression residues
+    chem_data = [
+        ('Charge removal\n(D/E\u2192N/Q)',  1, 0),
+        ('Aromatic ext.\n(\u2192Trp)',       3, 0),
+        ('Aromatic add.\n(\u2192Tyr)',       3, 0),
+        ('Side chain rem.\n(\u2192Gly)',     2, 1),
+        ('Non-conserv.\nat aromatic',        0, 1),
     ]
-    ax.legend(handles=legend_elements, loc='upper right', fontsize=9, framealpha=0.9)
 
-    # Adjust limits for label visibility
-    xlims = ax.get_xlim()
-    ylims = ax.get_ylim()
-    ax.set_xlim(xlims[0] - 2, xlims[1] + 5)
-    ax.set_ylim(min(ylims[0], -38), max(ylims[1], 14))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5.5),
+                                    gridspec_kw={'width_ratios': [1.2, 1]})
 
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
+    # --- Panel A: Stacked bar ---
+    categories = [d[0] for d in chem_data]
+    hits = [d[1] for d in chem_data]
+    fails = [d[2] for d in chem_data]
+    totals = [h + f for h, f in zip(hits, fails)]
+    rates = [h / t * 100 if t > 0 else 0 for h, t in zip(hits, totals)]
 
-    plt.savefig(os.path.join(FIG_DIR, 'fig_nf_vs_ddg.png'), dpi=300, bbox_inches='tight')
-    plt.savefig(os.path.join(FIG_DIR, 'fig_nf_vs_ddg.pdf'), bbox_inches='tight')
-    print("Saved fig_nf_vs_ddg.png/pdf")
+    y_pos = np.arange(len(categories))
+    ax1.barh(y_pos, hits, color='#388E3C', edgecolor='white', lw=0.5, height=0.55, label='Improved')
+    ax1.barh(y_pos, fails, left=hits, color='#C62828', edgecolor='white', lw=0.5, height=0.55, label='Failed')
+
+    for i, (h, f, rate) in enumerate(zip(hits, fails, rates)):
+        ax1.text(h + f + 0.15, i, f'{rate:.0f}%', va='center', fontsize=10, fontweight='bold',
+                 color='#388E3C' if rate > 50 else '#C62828')
+
+    ax1.set_yticks(y_pos)
+    ax1.set_yticklabels(categories, fontsize=10)
+    ax1.set_xlabel('Number of mutations tested')
+    ax1.set_title('A', fontweight='bold', loc='left', fontsize=14)
+    ax1.legend(loc='lower right', fontsize=9, framealpha=0.9)
+    ax1.set_xlim(0, 5)
+    ax1.spines['top'].set_visible(False)
+    ax1.spines['right'].set_visible(False)
+
+    # --- Panel B: ΔΔG distribution by chemistry (corrected-regression residues only) ---
+    chem_ddg = {
+        'Charge removal':     [(-18.2, 'D245N')],
+        'Aromatic extension': [(-33.7, 'F287W'), (-10.7, 'Y227W'), (-2.7, 'Y404W')],
+        'Aromatic addition':  [(-15.0, 'S262Y'), (-10.9, 'N248Y'), (-6.1, 'A246Y')],
+        'Side chain removal': [(-31.6, 'S247G'), (-16.2, 'T330G'), (+9.0, 'L306G')],
+        'Non-conservative':   [(+2.5, 'Y404H')],
+    }
+    chem_colors_strip = {
+        'Charge removal': '#1976D2',
+        'Aromatic extension': '#388E3C',
+        'Side chain removal': '#F57C00',
+        'Aromatic addition': '#7B1FA2',
+        'Non-conservative': '#C62828',
+    }
+
+    ax2.axhline(0, color='#616161', ls='--', lw=1, alpha=0.5)
+    ax2.axhspan(-45, 0, alpha=0.04, color='green')
+
+    x_idx = 0
+    xticks = []
+    xticklabels = []
+    for chem, vals in chem_ddg.items():
+        color = chem_colors_strip[chem]
+        for ddg, name in vals:
+            marker = 'o' if ddg < 0 else 'X'
+            ax2.scatter(x_idx, ddg, c=color, s=80, marker=marker, edgecolors='#333',
+                        linewidths=0.6, zorder=5)
+            ax2.text(x_idx, ddg - 2.2 if ddg < 0 else ddg + 2.2, name,
+                     ha='center', va='top' if ddg < 0 else 'bottom',
+                     fontsize=7, fontweight='bold', color='#333')
+            xticks.append(x_idx)
+            x_idx += 1
+        x_idx += 0.5  # gap between groups
+
+    ax2.set_ylabel(r'$\Delta\Delta G$ vs WT (kcal/mol)')
+    ax2.set_title('B', fontweight='bold', loc='left', fontsize=14)
+    ax2.set_xticks([])
+    ax2.set_xlim(-1.5, x_idx + 0.5)
+    ax2.set_ylim(-52, 16)
+    ax2.text(0.5, 0, 'WT', fontsize=8, color='#616161', transform=ax2.get_yaxis_transform())
+
+    # Group labels at bottom
+    group_centers = []
+    idx = 0
+    for chem, vals in chem_ddg.items():
+        center = idx + (len(vals) - 1) / 2
+        group_centers.append((center, chem.split('(')[0].strip()))
+        idx += len(vals) + 0.5
+    for cx, label in group_centers:
+        ax2.text(cx, -49, label, ha='center', va='top', fontsize=7, color='#555', style='italic',
+                 rotation=0)
+
+    ax2.spines['top'].set_visible(False)
+    ax2.spines['right'].set_visible(False)
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(FIG_DIR, 'fig_chemistry_summary.png'), dpi=300)
+    plt.savefig(os.path.join(FIG_DIR, 'fig_chemistry_summary.pdf'))
+    print("Saved fig_chemistry_summary.png/pdf")
     plt.close()
 
 
