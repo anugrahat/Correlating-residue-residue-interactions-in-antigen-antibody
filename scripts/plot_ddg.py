@@ -68,7 +68,7 @@ for i, name in enumerate(names):
     if name == 'Y157A':
         colors.append('#B71C1C')
     elif ddgs[i] < 0:
-        colors.append('#2196F3')
+        colors.append('#2E7D32')
     else:
         colors.append('#D32F2F')
 
@@ -89,7 +89,7 @@ ax.spines['right'].set_visible(False)
 
 # Annotations
 ax.text(0.02, 0.02, '\u2190 Stronger binding',
-        transform=ax.transAxes, fontsize=9, color='#2196F3', va='bottom')
+        transform=ax.transAxes, fontsize=9, color='#2E7D32', va='bottom')
 ax.text(0.98, 0.02, 'Weaker binding \u2192',
         transform=ax.transAxes, fontsize=9, color='#D32F2F', va='bottom', ha='right')
 
