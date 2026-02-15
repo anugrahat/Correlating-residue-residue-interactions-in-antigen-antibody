@@ -387,25 +387,24 @@ def make_figure3():
                      fontsize=7, fontweight='bold', color='#333')
             xticks.append(x_idx)
             x_idx += 1
-        x_idx += 0.5  # gap between groups
+        x_idx += 1.5  # wider gap between groups
 
     ax2.set_ylabel(r'$\Delta\Delta G$ vs WT (kcal/mol)')
     ax2.set_title('B', fontweight='bold', loc='left', fontsize=14)
-    ax2.set_xticks([])
     ax2.set_xlim(-1.5, x_idx + 0.5)
-    ax2.set_ylim(-52, 16)
+    ax2.set_ylim(-48, 16)
     ax2.text(0.5, 0, 'WT', fontsize=8, color='#616161', transform=ax2.get_yaxis_transform())
 
-    # Group labels at bottom
+    # Group labels as rotated x-tick labels
     group_centers = []
     idx = 0
     for chem, vals in chem_ddg.items():
         center = idx + (len(vals) - 1) / 2
-        group_centers.append((center, chem.split('(')[0].strip()))
-        idx += len(vals) + 0.5
-    for cx, label in group_centers:
-        ax2.text(cx, -49, label, ha='center', va='top', fontsize=7, color='#555', style='italic',
-                 rotation=0)
+        short = chem.split('(')[0].strip()
+        group_centers.append((center, short))
+        idx += len(vals) + 1.5
+    ax2.set_xticks([cx for cx, _ in group_centers])
+    ax2.set_xticklabels([lb for _, lb in group_centers], fontsize=8, rotation=30, ha='right')
 
     ax2.spines['top'].set_visible(False)
     ax2.spines['right'].set_visible(False)
