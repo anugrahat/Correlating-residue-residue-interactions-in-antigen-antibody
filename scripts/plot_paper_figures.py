@@ -412,9 +412,62 @@ def make_figure3():
     plt.close()
 
 
+# ==============================================================================
+# FIGURE 4: Standalone NF residue ranking (for slide use alongside Fig 2)
+# Uses distinct colors from MM-GBSA figure to avoid confusion
+# ==============================================================================
+def make_figure4():
+    print("=" * 70)
+    print("FIGURE 4: Residue NF Ranking (standalone)")
+    print("=" * 70)
+
+    resnames = load_gro_resnames(GRO_PATH)
+    df_nf = pd.read_csv(NF_FILE)
+    df_nf_plot = df_nf[df_nf['NetFavorability'] > 0.5].sort_values('NetFavorability', ascending=True)
+
+    # Distinct colors — teal/slate/amber, avoiding MM-GBSA blue/green/purple/orange/red
+    COLOR_HOT = '#00838F'       # dark teal
+    COLOR_FAVORABLE = '#455A64' # blue-grey slate
+    COLOR_UNFAVORABLE = '#E65100'  # deep amber
+
+    bar_c = []
+    for _, r in df_nf_plot.iterrows():
+        if r['Classification'] == 'hot':
+            bar_c.append(COLOR_HOT)
+        elif r['DominantSign'] == 'unfavorable':
+            bar_c.append(COLOR_UNFAVORABLE)
+        else:
+            bar_c.append(COLOR_FAVORABLE)
+
+    fig, ax = plt.subplots(figsize=(6, 6))
+    y_nf = np.arange(len(df_nf_plot))
+    ax.barh(y_nf, df_nf_plot['NetFavorability'].values, color=bar_c,
+            edgecolor='white', lw=0.3, height=0.65)
+    ax.set_yticks(y_nf)
+    ax.set_yticklabels(df_nf_plot['Label'].values, fontsize=9, fontfamily='monospace')
+    ax.set_xlabel(r'Net Favorability $\left(\sum |\beta_k \times \bar{F}_k|\right)$')
+
+    ax.legend(handles=[Patch(fc=COLOR_HOT, label='Hot spot'),
+                       Patch(fc=COLOR_FAVORABLE, label='Warm (favorable)'),
+                       Patch(fc=COLOR_UNFAVORABLE, label='Warm (unfavorable)')],
+              loc='lower right', fontsize=9, framealpha=0.9)
+
+    p70 = np.percentile(df_nf['NetFavorability'].values[df_nf['NetFavorability'].values > 0], 70)
+    ax.axvline(p70, color=COLOR_HOT, ls=':', lw=1, alpha=0.5)
+
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    plt.tight_layout()
+    plt.savefig(os.path.join(FIG_DIR, 'fig_nf_ranking.png'), dpi=300)
+    plt.savefig(os.path.join(FIG_DIR, 'fig_nf_ranking.pdf'))
+    print("Saved fig_nf_ranking.png/pdf")
+    plt.close()
+
+
 if __name__ == '__main__':
     os.makedirs(FIG_DIR, exist_ok=True)
     make_figure1()
     make_figure2()
     make_figure3()
+    make_figure4()
     print("\nDone!")
