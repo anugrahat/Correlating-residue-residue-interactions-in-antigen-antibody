@@ -1,0 +1,90 @@
+======================================================================
+ELASTIC NET WITH REPLICA-BASED CROSS-VALIDATION
+Subsampling every 30 frames, frames 1-1500
+======================================================================
+
+Loading replicas...
+  Loading replica 1...
+  Loading replica 2...
+  Loading replica 3...
+  Loading replica 4...
+  Loading replica 5...
+  Loading replica 6...
+  Loading replica 7...
+  Loading replica 8...
+  Loading replica 9...
+  Loading replica 10...
+  Total unique inter-contact pairs across replicas: 516
+
+Building subsampled ΔE/ΔF matrices...
+  Rep 1: 50 subsampled frames
+  Rep 2: 50 subsampled frames
+  Rep 3: 50 subsampled frames
+  Rep 4: 50 subsampled frames
+  Rep 5: 50 subsampled frames
+  Rep 6: 50 subsampled frames
+  Rep 7: 50 subsampled frames
+  Rep 8: 50 subsampled frames
+  Rep 9: 50 subsampled frames
+  Rep 10: 50 subsampled frames
+
+======================================================================
+LEAVE-2-REPLICAS-OUT CROSS-VALIDATION
+======================================================================
+  45 folds (C(10,2) = 45)
+    Fold 10/45 done (test R²=0.9804)
+    Fold 20/45 done (test R²=0.9747)
+    Fold 30/45 done (test R²=0.9842)
+    Fold 40/45 done (test R²=0.9220)
+
+  Train R²: 0.9894 ± 0.0007
+  Test  R²: 0.9592 ± 0.0268
+  Test RMSE: 37.9 ± 15.8 kJ/mol
+  Fixed alpha: 12.92, l1_ratio: 0.9
+
+  Features selected in >50% of folds: 75/516
+
+Fitting final model on all replicas...
+  alpha=2.6827, l1_ratio=0.95
+  Full-data R²=0.9920
+  Non-zero β: 139/516
+
+Computing NetFavorability (robust features only)...
+Saved: /home/anugraha/c1_WT/analysis/net_favorability_replicaCV.csv
+
+Robust residues (selected >50% of folds):
+    Y406 (Global 406): NF=72.50 [favorable] (6 pairs, sel=82%) - hot
+    Y227 (Global 227): NF=65.89 [favorable] (3 pairs, sel=90%) - hot
+    Y405 (Global 405): NF=60.96 [favorable] (5 pairs, sel=91%) - hot
+    N248 (Global 248): NF=45.74 [favorable] (3 pairs, sel=97%) - hot
+    H225 (Global 225): NF=43.41 [favorable] (7 pairs, sel=81%) - hot
+    Y404 (Global 404): NF=29.98 [unfavorable] (5 pairs, sel=78%) - hot
+    D245 (Global 245): NF=29.61 [favorable] (3 pairs, sel=90%) - hot
+    A255 (Global 255): NF=27.18 [favorable] (4 pairs, sel=83%) - hot
+    F244 (Global 244): NF=23.43 [favorable] (2 pairs, sel=78%) - warm
+    F287 (Global 287): NF=17.22 [favorable] (6 pairs, sel=77%) - warm
+    T403 (Global 403): NF=14.12 [favorable] (2 pairs, sel=83%) - warm
+    W289 (Global 289): NF=13.25 [favorable] (3 pairs, sel=79%) - warm
+    R249 (Global 249): NF=12.46 [favorable] (2 pairs, sel=52%) - warm
+    S262 (Global 262): NF=9.63 [favorable] (3 pairs, sel=72%) - warm
+    S247 (Global 247): NF=7.65 [unfavorable] (4 pairs, sel=76%) - warm
+    E401 (Global 401): NF=7.34 [favorable] (3 pairs, sel=85%) - warm
+    S260 (Global 260): NF=6.42 [favorable] (2 pairs, sel=86%) - warm
+    S258 (Global 258): NF=5.51 [favorable] (1 pairs, sel=64%) - warm
+    R256 (Global 256): NF=4.81 [favorable] (1 pairs, sel=100%) - warm
+    G358 (Global 358): NF=3.92 [favorable] (1 pairs, sel=96%) - warm
+    T251 (Global 251): NF=3.65 [favorable] (1 pairs, sel=98%) - warm
+    S356 (Global 356): NF=3.17 [favorable] (1 pairs, sel=80%) - warm
+    A246 (Global 246): NF=1.76 [favorable] (1 pairs, sel=100%) - warm
+    R213 (Global 213): NF=1.10 [favorable] (1 pairs, sel=80%) - warm
+    E196 (Global 196): NF=0.58 [favorable] (1 pairs, sel=80%) - warm
+    N288 (Global 288): NF=0.47 [favorable] (1 pairs, sel=56%) - warm
+Saved: /home/anugraha/c1_WT/analysis/elastic_net_coefficients_replicaCV.csv
+Saved CV fold stats and selection frequencies
+
+Skipping figures (--no-figs). Run locally to generate plots.
+
+======================================================================
+ALL DONE
+======================================================================
+[DONE] Replica CV regression complete
