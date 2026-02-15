@@ -137,6 +137,11 @@ def make_figure1():
     df_pivot = df_frequency.pivot_table(
         index='Frame', columns='ResiduePair', values=freq_col, fill_value=0
     ).sort_index()
+    # Filter out intra-antibody pairs (both residues >= 195 in GRO numbering)
+    inter_cols = [c for c in df_pivot.columns
+                  if not all(int(x) >= 195 for x in c.split('-'))]
+    df_pivot = df_pivot[inter_cols]
+
     df_energy_idx = df_energy.set_index('Frame').sort_index()
     common = df_pivot.index.intersection(df_energy_idx.index)
     df_E = df_energy_idx.loc[common, 'AverageInteractionEnergy']
