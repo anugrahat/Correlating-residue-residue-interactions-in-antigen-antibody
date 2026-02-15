@@ -279,14 +279,6 @@ def make_figure2():
     ax.set_xticks(x)
     ax.set_xticklabels(names, rotation=40, ha='right', fontsize=9)
     ax.set_ylabel(r'$\Delta G_{\mathrm{bind}}$ (kcal/mol)')
-    ax.set_title('MM-GBSA Binding Free Energy', fontweight='bold', fontsize=13)
-
-    # Arrow
-    ax.annotate('', xy=(-0.06, 0.1), xytext=(-0.06, 0.9),
-                xycoords='axes fraction',
-                arrowprops=dict(arrowstyle='->', color='#388E3C', lw=1.8))
-    ax.text(-0.08, 0.5, 'Stronger\nbinding', transform=ax.transAxes,
-            fontsize=8, color='#388E3C', va='center', ha='center', rotation=90)
 
     legend_elements = [
         Patch(fc='#1976D2', label='Charge removal (D/E\u2192N/Q)'),
@@ -296,8 +288,8 @@ def make_figure2():
         Patch(fc='#C62828', label='Failed / Control'),
         Patch(fc='#616161', label='WT'),
     ]
-    ax.legend(handles=legend_elements, loc='upper right', fontsize=8,
-              framealpha=0.95, edgecolor='#ccc', ncol=2)
+    ax.legend(handles=legend_elements, loc='lower right', fontsize=8,
+              framealpha=0.95, edgecolor='#ccc')
 
     ax.set_xlim(-0.6, len(names) - 0.4)
     ax.spines['top'].set_visible(False)
