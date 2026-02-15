@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-ΔΔG plot for all mutations at the 26 antibody interface residues
-identified by NF ranking, plus Y157A antigen control.
+ΔΔG plot for mutations at the top 12 NF-ranked antibody interface
+residues, plus Y157A antigen control.
 """
 
 import numpy as np
@@ -29,21 +29,17 @@ plt.rcParams.update({
 FIG_DIR = "/home/anugraha/antibody_optimization/figures"
 WT_DG = -25.31
 
-# (mutation_name, dG, sem, NF_residue)
-# Only mutations at the 26 antibody interface residues + Y157A control
+# Top 12 NF residues: Y406, Y227, Y405, N248, H225, Y404, D245, A255,
+#                     F244, F287, T403, W289
+# Only mutations at these residues with GBSA data + Y157A control
+# (Y405, A255, F244, W289 have no mutation GBSA data)
 data = [
     ('F287W',   -58.99, 1.44, 'F287'),
-    ('S247G',   -56.87, 1.20, 'S247'),
     ('D245N',   -43.47, 1.10, 'D245'),
-    ('S258G',   -41.78, 0.82, 'S258'),
     ('Y406W',   -41.05, 1.22, 'Y406'),
-    ('S262Y',   -40.28, 1.20, 'S262'),
     ('N248Y',   -36.20, 1.01, 'N248'),
     ('Y227W',   -35.99, 0.58, 'Y227'),
-    ('A246Y',   -31.41, 0.81, 'A246'),
-    ('N288G',   -29.08, 1.25, 'N288'),
     ('Y404W',   -28.00, 0.96, 'Y404'),
-    ('S258A',   -24.35, 0.91, 'S258'),
     ('Y404H',   -22.79, 0.77, 'Y404'),
     ('T403Y',   -21.08, 1.57, 'T403'),
     ('Y157A',   -13.73, 1.49, 'Y157'),   # antigen control
